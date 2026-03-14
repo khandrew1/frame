@@ -1,7 +1,10 @@
 import { createServer, type Server as HttpServer } from "node:http"
 
 import { getRequestListener } from "@hono/node-server"
-import { browserToServerMessageSchema } from "@workspace/protocol"
+import {
+  browserToServerMessageSchema,
+  type BrowserToServerMessage,
+} from "@workspace/protocol"
 import type { Hono } from "hono"
 import { WebSocketServer, type WebSocket } from "ws"
 
@@ -82,7 +85,10 @@ export function attachWebSocketServer(
         }
 
         try {
-          await sessionRegistry.handleBrowserMessage(sessionId, parsed.data)
+          await sessionRegistry.handleBrowserMessage(
+            sessionId,
+            parsed.data as BrowserToServerMessage
+          )
         } catch (error) {
           ws.send(
             JSON.stringify({

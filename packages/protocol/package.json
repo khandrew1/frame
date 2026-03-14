@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "codex:generate": "node ./scripts/generate-codex-types.mjs",
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"

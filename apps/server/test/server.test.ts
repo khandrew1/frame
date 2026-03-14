@@ -1,6 +1,7 @@
 import { once } from "node:events"
 
 import { afterEach, describe, expect, it } from "vitest"
+import { browserToServerMessageSchema } from "@workspace/protocol"
 import { WebSocket } from "ws"
 
 import { loadConfig } from "../src/config.js"
@@ -43,8 +44,24 @@ async function closeSocket(socket: WebSocket) {
   }
 
   const closePromise = once(socket, "close").then(() => undefined)
-  socket.close()
-  await closePromise
+
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.close()
+  } else {
+    socket.terminate()
+  }
+
+  await Promise.race([
+    closePromise,
+    new Promise<void>((resolve) => {
+      setTimeout(() => {
+        if (socket.readyState !== WebSocket.CLOSED) {
+          socket.terminate()
+        }
+        resolve()
+      }, 200)
+    }),
+  ])
 }
 
 describe("server smoke test", () => {
@@ -77,7 +94,7 @@ describe("server smoke test", () => {
     const fake = new FakeChildProcess()
     const config = loadConfig()
     const registry = new SessionRegistry({
-      reconnectTtlMs: 50,
+      reconnectTtlMs: 500,
       initializeTimeoutMs: 100,
       experimentalApi: false,
       clientInfo: config.clientInfo,
@@ -186,13 +203,108 @@ describe("server smoke test", () => {
     })
   })
 
+  it("routes browser server request responses through the session registry", async () => {
+    const fake = new FakeChildProcess()
+    const config = loadConfig()
+    const registry = new SessionRegistry({
+      reconnectTtlMs: 500,
+      initializeTimeoutMs: 100,
+      experimentalApi: false,
+      clientInfo: config.clientInfo,
+      spawnProcess: () => fake,
+    })
+    queueMicrotask(() => {
+      fake.send({ id: 0, result: {} })
+    })
+
+    const sessionId = await registry.createSession()
+
+    await registry.handleBrowserMessage(sessionId, {
+      type: "serverRequest.respond",
+      message: {
+        id: "question-1",
+        result: {
+          answers: {
+            workspace: {
+              answers: ["Use the current repo"],
+            },
+          },
+        },
+      },
+    })
+
+    await waitForCondition(() =>
+      fake.writtenMessages.some(
+        (message) =>
+          typeof message === "object" &&
+          message !== null &&
+          "id" in message &&
+          message.id === "question-1"
+      )
+    )
+
+    expect(fake.writtenMessages).toContainEqual({
+      id: "question-1",
+      result: {
+        answers: {
+          workspace: {
+            answers: ["Use the current repo"],
+          },
+        },
+      },
+    })
+  })
+
+  it("rejects browser initialize requests at the protocol boundary", async () => {
+    const fake = new FakeChildProcess()
+    const config = loadConfig()
+    const registry = new SessionRegistry({
+      reconnectTtlMs: 500,
+      initializeTimeoutMs: 100,
+      experimentalApi: false,
+      clientInfo: config.clientInfo,
+      spawnProcess: () => fake,
+    })
+    queueMicrotask(() => {
+      fake.send({ id: 0, result: {} })
+    })
+
+    await registry.createSession()
+
+    const parsed = browserToServerMessageSchema.safeParse({
+      type: "rpc.request",
+      message: {
+        id: 11,
+        method: "initialize",
+        params: {
+          clientInfo: {
+            name: "bad_client",
+            title: "Bad Client",
+            version: "0.0.1",
+          },
+        },
+      },
+    })
+
+    expect(parsed.success).toBe(false)
+
+    const initializeWrites = fake.writtenMessages.filter(
+      (message) =>
+        typeof message === "object" &&
+        message !== null &&
+        "method" in message &&
+        message.method === "initialize"
+    )
+    expect(initializeWrites).toHaveLength(1)
+  })
+
   it("returns a degraded health response when codex is unavailable", async () => {
     const config = {
       ...loadConfig(),
       codexCommand: "/definitely/missing/codex",
     }
     const registry = new SessionRegistry({
-      reconnectTtlMs: 50,
+      reconnectTtlMs: 500,
       initializeTimeoutMs: 100,
       experimentalApi: false,
       clientInfo: config.clientInfo,

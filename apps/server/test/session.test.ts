@@ -48,6 +48,7 @@ describe("CodexSession", () => {
         id: 0,
         method: "initialize",
         params: {
+          capabilities: null,
           clientInfo: {
             name: "frame_gui",
             title: "Frame GUI",
@@ -57,7 +58,6 @@ describe("CodexSession", () => {
       },
       {
         method: "initialized",
-        params: {},
       },
     ])
 
@@ -86,20 +86,52 @@ describe("CodexSession", () => {
     await session.initialize()
 
     process.send({
-      id: "approval-1",
-      method: "item/fileChange/requestApproval",
+      id: "question-1",
+      method: "item/tool/requestUserInput",
       params: {
-        itemId: "item_123",
+        questions: [],
       },
     })
 
     expect(messages).toContainEqual({
       type: "serverRequest.request",
       message: {
-        id: "approval-1",
-        method: "item/fileChange/requestApproval",
+        id: "question-1",
+        method: "item/tool/requestUserInput",
         params: {
-          itemId: "item_123",
+          questions: [],
+        },
+      },
+    })
+  })
+
+  it("writes server request responses back to the child transport", async () => {
+    const { process, session } = createSession()
+
+    queueMicrotask(() => {
+      process.send({ id: 0, result: {} })
+    })
+
+    await session.initialize()
+
+    session.sendServerRequestResponse({
+      id: "question-1",
+      result: {
+        answers: {
+          workspace: {
+            answers: ["Use the current repo"],
+          },
+        },
+      },
+    })
+
+    expect(process.writtenMessages.at(-1)).toEqual({
+      id: "question-1",
+      result: {
+        answers: {
+          workspace: {
+            answers: ["Use the current repo"],
+          },
         },
       },
     })
