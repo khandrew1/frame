@@ -60,9 +60,17 @@ type CodexServerRequestSuccessResult =
   | FileChangeRequestApprovalResponse
   | ToolRequestUserInputResponse
 
-type AssertNever<T extends never> = T
+const defineExhaustiveMethodList = <T extends string>() =>
+  <U extends readonly T[]>(
+    methods: U &
+      ([T] extends [U[number]]
+        ? unknown
+        : readonly ["Missing methods", Exclude<T, U[number]>])
+  ) => methods
 
-export const codexBrowserRequestMethods = [
+export const codexBrowserRequestMethods = defineExhaustiveMethodList<
+  CodexBrowserRequest["method"]
+>()([
   "thread/start",
   "thread/resume",
   "thread/fork",
@@ -99,11 +107,7 @@ export const codexBrowserRequestMethods = [
   "config/batchWrite",
   "configRequirements/read",
   "account/read",
-] as const satisfies readonly CodexBrowserRequest["method"][]
-
-void (0 as AssertNever<
-  Exclude<CodexBrowserRequest["method"], (typeof codexBrowserRequestMethods)[number]>
->)
+] as const)
 
 export const codexServerNotificationMethods = [
   "error",
@@ -140,17 +144,15 @@ export const codexServerNotificationMethods = [
   "sessionConfigured",
 ] as const satisfies readonly CodexServerNotification["method"][]
 
-export const codexServerRequestMethods = [
+export const codexServerRequestMethods = defineExhaustiveMethodList<
+  CodexServerRequest["method"]
+>()([
   "item/commandExecution/requestApproval",
   "item/fileChange/requestApproval",
   "item/tool/requestUserInput",
   "item/tool/call",
   "account/chatgptAuthTokens/refresh",
-] as const satisfies readonly CodexServerRequest["method"][]
-
-void (0 as AssertNever<
-  Exclude<CodexServerRequest["method"], (typeof codexServerRequestMethods)[number]>
->)
+] as const)
 
 const codexBrowserRequestMethodSet = new Set<string>(codexBrowserRequestMethods)
 const codexServerNotificationMethodSet = new Set<string>(
