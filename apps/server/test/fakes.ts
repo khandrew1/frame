@@ -4,10 +4,7 @@ import { PassThrough, Writable } from "node:stream"
 import { JsonLineParser } from "../src/codex/jsonl.js"
 import type { ChildProcessLike } from "../src/codex/session.js"
 
-export class FakeChildProcess
-  extends EventEmitter
-  implements ChildProcessLike
-{
+export class FakeChildProcess extends EventEmitter implements ChildProcessLike {
   stdout = new PassThrough()
   stderr = new PassThrough()
   stdinParser = new JsonLineParser()

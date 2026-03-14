@@ -31,7 +31,7 @@ export function createApp(
       error:
         result.status === 0
           ? null
-          : result.error?.message ?? stderr ?? "codex not available",
+          : (result.error?.message ?? stderr ?? "codex not available"),
     })
   })
 
@@ -48,7 +48,10 @@ export function createApp(
     } catch (error) {
       return c.json(
         {
-          error: error instanceof Error ? error.message : "Failed to create session.",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to create session.",
         },
         500
       )
