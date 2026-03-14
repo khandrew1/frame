@@ -40,50 +40,66 @@ export function ChatComposer() {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 pb-6 mt-auto">
-      <div className="relative flex w-full flex-col p-3 rounded-3xl bg-card border shadow-sm ring-1 ring-inset ring-border/50 transition-all focus-within:ring-primary/50">
+    <div className="mx-auto mt-auto w-full max-w-4xl px-4 pb-6">
+      <div className="relative flex w-full flex-col rounded-3xl border bg-card p-3 shadow-sm ring-1 ring-border/50 transition-all ring-inset focus-within:ring-primary/50">
         <Textarea
           ref={textareaRef}
           value={text}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
           placeholder="Ask Codex anything, @ to add files, / for commands"
-          className="min-h-[48px] max-h-[200px] w-full resize-none bg-transparent dark:bg-transparent border-0 px-3 py-3 text-base shadow-none focus-visible:ring-0 md:text-sm"
+          className="max-h-[200px] min-h-[48px] w-full resize-none border-0 bg-transparent px-3 py-3 text-base shadow-none focus-visible:ring-0 md:text-sm dark:bg-transparent"
           rows={1}
         />
 
-        <div className="flex items-center justify-between mt-2 px-1">
+        <div className="mt-2 flex items-center justify-between px-1">
           {/* Left tools */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
+              className="h-8 w-8 rounded-full text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
             >
               <Plus className="h-5 w-5" />
               <span className="sr-only">Attach file</span>
             </Button>
 
             <DropdownMenu>
-              <DropdownMenuTrigger className="inline-flex items-center justify-center whitespace-nowrap h-8 px-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-md transition-colors data-[state=open]:bg-muted/80 w-auto outline-none focus-visible:ring-1 focus-visible:ring-ring">
+              <DropdownMenuTrigger className="inline-flex h-8 w-auto items-center justify-center rounded-md px-2 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-muted/80 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring data-[state=open]:bg-muted/80">
                 GPT-5.4
                 <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-70" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-[160px] rounded-xl">
-                <DropdownMenuItem className="text-sm rounded-lg cursor-pointer">GPT-5.4</DropdownMenuItem>
-                <DropdownMenuItem className="text-sm rounded-lg cursor-pointer">GPT-4.5</DropdownMenuItem>
+              <DropdownMenuContent
+                align="start"
+                className="w-[160px] rounded-xl"
+              >
+                <DropdownMenuItem className="cursor-pointer rounded-lg text-sm">
+                  GPT-5.4
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer rounded-lg text-sm">
+                  GPT-4.5
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
             <DropdownMenu>
-              <DropdownMenuTrigger className="inline-flex items-center justify-center whitespace-nowrap h-8 px-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-md transition-colors data-[state=open]:bg-muted/80 outline-none focus-visible:ring-1 focus-visible:ring-ring">
+              <DropdownMenuTrigger className="inline-flex h-8 items-center justify-center rounded-md px-2 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-muted/80 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring data-[state=open]:bg-muted/80">
                 High
                 <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-70" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[120px] rounded-xl">
-                <DropdownMenuItem className="text-sm rounded-lg cursor-pointer">Low</DropdownMenuItem>
-                <DropdownMenuItem className="text-sm rounded-lg cursor-pointer">Medium</DropdownMenuItem>
-                <DropdownMenuItem className="text-sm rounded-lg cursor-pointer">High</DropdownMenuItem>
+              <DropdownMenuContent
+                align="start"
+                className="min-w-[120px] rounded-xl"
+              >
+                <DropdownMenuItem className="cursor-pointer rounded-lg text-sm">
+                  Low
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer rounded-lg text-sm">
+                  Medium
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer rounded-lg text-sm">
+                  High
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -95,9 +111,9 @@ export function ChatComposer() {
               onClick={handleSubmit}
               className={cn(
                 "h-8 w-8 rounded-full transition-all duration-200",
-                text.trim().length > 0 
-                  ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm" 
-                  : "bg-muted text-muted-foreground hover:bg-muted hover:text-muted-foreground opacity-50 cursor-not-allowed"
+                text.trim().length > 0
+                  ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+                  : "cursor-not-allowed bg-muted text-muted-foreground opacity-50 hover:bg-muted hover:text-muted-foreground"
               )}
               disabled={text.trim().length === 0}
             >

@@ -22,7 +22,7 @@ export function App() {
             </p>
           </div>
         </header>
-        <main className="flex flex-1 flex-col p-4 md:p-6 relative overflow-hidden">
+        <main className="relative flex flex-1 flex-col overflow-hidden p-4 md:p-6">
           <div className="flex-1 overflow-y-auto">
             {/* Chat conversation messages will go here */}
           </div>
