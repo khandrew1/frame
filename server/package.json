@@ -1,0 +1,31 @@
+{
+  "name": "@workspace/server",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @workspace/protocol build && tsx watch src/index.ts",
+    "build": "pnpm --filter @workspace/protocol build && tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm --filter @workspace/protocol build && vitest run"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/node": "^25.1.0",
+    "@types/ws": "^8.18.1",
+    "eslint": "^9.39.2",
+    "globals": "^17.2.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.54.0",
+    "vitest": "^4.1.0"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.4",
+    "@workspace/protocol": "workspace:*",
+    "hono": "^4.10.4",
+    "ws": "^8.19.0"
+  }
+}
