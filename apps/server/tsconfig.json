@@ -15,7 +15,7 @@
     "erasableSyntaxOnly": true,
     "baseUrl": ".",
     "paths": {
-      "@workspace/protocol": ["../packages/protocol/src/index.ts"]
+      "@workspace/protocol": ["../../packages/protocol/src/index.ts"]
     }
   },
   "include": ["src", "test"]
