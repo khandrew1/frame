@@ -6,7 +6,7 @@ import type {
   JsonRpcResponse,
   ServerToBrowserMessage,
 } from "@workspace/protocol"
-import type { WebSocket as NodeWebSocket } from "ws"
+import { WebSocket, type WebSocket as NodeWebSocket } from "ws"
 
 type SpawnProcess = () => ChildProcessLike
 
