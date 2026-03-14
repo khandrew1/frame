@@ -124,4 +124,14 @@ describe("CodexSession", () => {
       retryable: true,
     })
   })
+
+  it("rejects initialize immediately when the child emits an error", async () => {
+    const { process, session } = createSession()
+
+    queueMicrotask(() => {
+      process.emitError(new Error("spawn ENOENT"))
+    })
+
+    await expect(session.initialize()).rejects.toThrow("spawn ENOENT")
+  })
 })

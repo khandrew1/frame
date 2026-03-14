@@ -187,4 +187,54 @@ describe("server smoke test", () => {
       },
     })
   })
+
+  it("returns a degraded health response when codex is unavailable", async () => {
+    const config = {
+      ...loadConfig(),
+      codexCommand: "/definitely/missing/codex",
+    }
+    const registry = new SessionRegistry({
+      reconnectTtlMs: 50,
+      initializeTimeoutMs: 100,
+      experimentalApi: false,
+      clientInfo: config.clientInfo,
+      spawnProcess: () => new FakeChildProcess(),
+    })
+    const app = createApp(config, registry)
+
+    const response = await app.request("http://localhost/healthz")
+    const payload = (await response.json()) as {
+      ok: boolean
+      codexAvailable: boolean
+      version: string | null
+      error: string | null
+    }
+
+    expect(response.status).toBe(200)
+    expect(payload.ok).toBe(false)
+    expect(payload.codexAvailable).toBe(false)
+    expect(payload.version).toBeNull()
+    expect(payload.error).toBeTruthy()
+  })
+
+  it("expires sessions that never attach a websocket", async () => {
+    const fake = new FakeChildProcess()
+    const config = loadConfig()
+    const registry = new SessionRegistry({
+      reconnectTtlMs: 25,
+      initializeTimeoutMs: 100,
+      experimentalApi: false,
+      clientInfo: config.clientInfo,
+      spawnProcess: () => fake,
+    })
+
+    queueMicrotask(() => {
+      fake.send({ id: 0, result: {} })
+    })
+
+    const sessionId = await registry.createSession()
+    expect(registry.hasSession(sessionId)).toBe(true)
+
+    await waitForCondition(() => !registry.hasSession(sessionId))
+  })
 })

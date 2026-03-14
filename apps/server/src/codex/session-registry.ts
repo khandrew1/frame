@@ -63,11 +63,13 @@ export class SessionRegistry {
       clientInfo: this.#clientInfo,
     })
 
-    this.#sessions.set(session.sessionId, {
+    const record: SessionRecord = {
       session,
       socket: null,
       expiryTimer: null,
-    })
+    }
+
+    this.#sessions.set(session.sessionId, record)
 
     session.on("message", (message) => {
       this.#sendToSocket(session.sessionId, message)
@@ -86,6 +88,7 @@ export class SessionRegistry {
 
     try {
       await session.initialize()
+      this.#scheduleExpiry(session.sessionId, record)
       return session.sessionId
     } catch (error) {
       const record = this.#sessions.get(session.sessionId)
@@ -135,9 +138,7 @@ export class SessionRegistry {
     }
 
     record.socket = null
-    record.expiryTimer = setTimeout(() => {
-      this.closeSession(sessionId)
-    }, this.#reconnectTtlMs)
+    this.#scheduleExpiry(sessionId, record)
   }
 
   async handleBrowserMessage(sessionId: string, message: BrowserToServerMessage) {
@@ -196,5 +197,12 @@ export class SessionRegistry {
 
     clearTimeout(record.expiryTimer)
     record.expiryTimer = null
+  }
+
+  #scheduleExpiry(sessionId: string, record: SessionRecord) {
+    this.#clearExpiryTimer(record)
+    record.expiryTimer = setTimeout(() => {
+      this.closeSession(sessionId)
+    }, this.#reconnectTtlMs)
   }
 }

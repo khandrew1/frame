@@ -34,6 +34,10 @@ export class FakeChildProcess
     this.stderr.write(`${message}\n`)
   }
 
+  emitError(error: Error) {
+    this.emit("error", error)
+  }
+
   crash(code = 1) {
     this.emit("exit", code, null)
   }

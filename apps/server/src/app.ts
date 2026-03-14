@@ -15,12 +15,23 @@ export function createApp(
     const result = spawnSync(config.codexCommand, ["--version"], {
       encoding: "utf8",
     })
+    const stdout =
+      typeof result.stdout === "string" && result.stdout.trim().length > 0
+        ? result.stdout.trim()
+        : null
+    const stderr =
+      typeof result.stderr === "string" && result.stderr.trim().length > 0
+        ? result.stderr.trim()
+        : null
 
     return c.json({
       ok: result.status === 0,
       codexAvailable: result.status === 0,
-      version: result.stdout.trim() || null,
-      error: result.status === 0 ? null : result.stderr.trim() || "codex not available",
+      version: stdout,
+      error:
+        result.status === 0
+          ? null
+          : result.error?.message ?? stderr ?? "codex not available",
     })
   })
 

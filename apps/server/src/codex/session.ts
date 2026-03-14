@@ -232,13 +232,17 @@ export class CodexSession extends EventEmitter<SessionEventMap> {
     })
 
     this.#process.on("error", (error) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to start Codex app-server."
+
+      this.#rejectPendingRequests(new Error(message))
       this.emit(
         "message",
         toErrorMessage(
           "spawn_failed",
-          error instanceof Error
-            ? error.message
-            : "Failed to start Codex app-server.",
+          message,
           true
         )
       )
@@ -246,10 +250,9 @@ export class CodexSession extends EventEmitter<SessionEventMap> {
 
     this.#process.on("exit", (code, signal) => {
       this.#isClosed = true
-      for (const pending of this.#pendingRequests.values()) {
-        pending.reject(new Error("Codex app-server exited before responding."))
-      }
-      this.#pendingRequests.clear()
+      this.#rejectPendingRequests(
+        new Error("Codex app-server exited before responding.")
+      )
 
       if (this.#isReady) {
         const reason = signal
@@ -304,5 +307,12 @@ export class CodexSession extends EventEmitter<SessionEventMap> {
       type: "rpc.notification",
       message: parsed.data,
     })
+  }
+
+  #rejectPendingRequests(error: Error) {
+    for (const pending of this.#pendingRequests.values()) {
+      pending.reject(error)
+    }
+    this.#pendingRequests.clear()
   }
 }
