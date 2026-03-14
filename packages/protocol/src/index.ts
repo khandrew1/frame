@@ -60,44 +60,59 @@ type CodexServerRequestSuccessResult =
   | FileChangeRequestApprovalResponse
   | ToolRequestUserInputResponse
 
-export const codexBrowserRequestMethods = [
-  "thread/start",
-  "thread/resume",
-  "thread/fork",
-  "thread/archive",
-  "thread/name/set",
-  "thread/unarchive",
-  "thread/compact/start",
-  "thread/rollback",
-  "thread/list",
-  "thread/loaded/list",
-  "thread/read",
-  "skills/list",
-  "skills/remote/read",
-  "skills/remote/write",
-  "app/list",
-  "skills/config/write",
-  "turn/start",
-  "turn/steer",
-  "turn/interrupt",
-  "review/start",
-  "model/list",
-  "experimentalFeature/list",
-  "mcpServer/oauth/login",
-  "config/mcpServer/reload",
-  "mcpServerStatus/list",
-  "account/login/start",
-  "account/login/cancel",
-  "account/logout",
-  "account/rateLimits/read",
-  "feedback/upload",
-  "command/exec",
-  "config/read",
-  "config/value/write",
-  "config/batchWrite",
-  "configRequirements/read",
-  "account/read",
-] as const satisfies readonly CodexBrowserRequest["method"][]
+const defineExhaustiveMethodAllowlist = <TMethod extends string>() =>
+  <
+    TList extends readonly TMethod[],
+    TMissing extends Exclude<TMethod, TList[number]> = Exclude<
+      TMethod,
+      TList[number]
+    >,
+  >(
+    list: TList &
+      ([TMissing] extends [never]
+        ? unknown
+        : ["Missing methods", TMissing]),
+  ) => list
+
+export const codexBrowserRequestMethods =
+  defineExhaustiveMethodAllowlist<CodexBrowserRequest["method"]>()([
+    "thread/start",
+    "thread/resume",
+    "thread/fork",
+    "thread/archive",
+    "thread/name/set",
+    "thread/unarchive",
+    "thread/compact/start",
+    "thread/rollback",
+    "thread/list",
+    "thread/loaded/list",
+    "thread/read",
+    "skills/list",
+    "skills/remote/read",
+    "skills/remote/write",
+    "app/list",
+    "skills/config/write",
+    "turn/start",
+    "turn/steer",
+    "turn/interrupt",
+    "review/start",
+    "model/list",
+    "experimentalFeature/list",
+    "mcpServer/oauth/login",
+    "config/mcpServer/reload",
+    "mcpServerStatus/list",
+    "account/login/start",
+    "account/login/cancel",
+    "account/logout",
+    "account/rateLimits/read",
+    "feedback/upload",
+    "command/exec",
+    "config/read",
+    "config/value/write",
+    "config/batchWrite",
+    "configRequirements/read",
+    "account/read",
+  ] as const)
 
 export const codexServerNotificationMethods = [
   "error",
@@ -134,13 +149,14 @@ export const codexServerNotificationMethods = [
   "sessionConfigured",
 ] as const satisfies readonly CodexServerNotification["method"][]
 
-export const codexServerRequestMethods = [
-  "item/commandExecution/requestApproval",
-  "item/fileChange/requestApproval",
-  "item/tool/requestUserInput",
-  "item/tool/call",
-  "account/chatgptAuthTokens/refresh",
-] as const satisfies readonly CodexServerRequest["method"][]
+export const codexServerRequestMethods =
+  defineExhaustiveMethodAllowlist<CodexServerRequest["method"]>()([
+    "item/commandExecution/requestApproval",
+    "item/fileChange/requestApproval",
+    "item/tool/requestUserInput",
+    "item/tool/call",
+    "account/chatgptAuthTokens/refresh",
+  ] as const)
 
 const codexBrowserRequestMethodSet = new Set<string>(codexBrowserRequestMethods)
 const codexServerNotificationMethodSet = new Set<string>(
