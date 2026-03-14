@@ -1,9 +1,17 @@
 import {
+  ChevronRight,
   FolderIcon,
+  FolderOpenIcon,
   FolderPlusIcon,
   MessageSquareIcon,
   PencilLineIcon,
 } from "lucide-react"
+
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@workspace/ui/components/collapsible"
 
 import {
   Sidebar,
@@ -20,8 +28,6 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  SidebarRail,
-  SidebarSeparator,
 } from "@workspace/ui/components/sidebar"
 
 type Thread = {
@@ -111,22 +117,24 @@ const threadFolders: ThreadFolder[] = [
 
 export function AppSidebar() {
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="offcanvas" variant="inset">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              tooltip="New Thread"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
-            >
+            <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+              <span className="truncate font-semibold text-base py-1">Frame</span>
+            </div>
+          </SidebarMenuItem>
+        </SidebarMenu>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton tooltip="New Thread">
               <PencilLineIcon />
               <span>New Thread</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarSeparator />
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Threads</SidebarGroupLabel>
@@ -136,36 +144,47 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {threadFolders.map((folder) => (
-                <SidebarMenuItem key={folder.id}>
-                  <SidebarMenuButton tooltip={folder.name}>
-                    <FolderIcon />
-                    <span>{folder.name}</span>
-                  </SidebarMenuButton>
-                  <SidebarMenuBadge>{folder.threads.length}</SidebarMenuBadge>
-                  {folder.threads.length > 0 ? (
-                    <SidebarMenuSub>
-                      {folder.threads.map((thread) => (
-                        <SidebarMenuSubItem key={thread.id}>
-                          <SidebarMenuSubButton href="#" isActive={thread.isActive}>
-                            <MessageSquareIcon />
-                            <span className="min-w-0 flex-1 truncate">
-                              {thread.title}
-                            </span>
-                            <span className="ml-auto shrink-0 text-[11px] text-sidebar-foreground/50">
-                              {thread.updatedAt}
-                            </span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  ) : null}
-                </SidebarMenuItem>
+                <Collapsible
+                  key={folder.id}
+                  render={<SidebarMenuItem />}
+                  defaultOpen={folder.threads.some((t) => t.isActive)}
+                  className="group/collapsible"
+                >
+                    <CollapsibleTrigger render={<SidebarMenuButton tooltip={folder.name} />}>
+                        <FolderIcon className="group-data-[panel-open]/menu-button:hidden group-hover/menu-button:!hidden" />
+                        <FolderOpenIcon className="hidden group-data-[panel-open]/menu-button:block group-hover/menu-button:!hidden" />
+                        <ChevronRight className="hidden group-hover/menu-button:!block transition-transform duration-200 group-data-[panel-open]/menu-button:rotate-90" />
+                        <span>{folder.name}</span>
+                    </CollapsibleTrigger>
+                    <SidebarMenuBadge>{folder.threads.length}</SidebarMenuBadge>
+                    <CollapsibleContent>
+                      {folder.threads.length > 0 ? (
+                        <SidebarMenuSub>
+                          {folder.threads.map((thread) => (
+                            <SidebarMenuSubItem key={thread.id}>
+                              <SidebarMenuSubButton
+                                href="#"
+                                isActive={thread.isActive}
+                              >
+                                <MessageSquareIcon />
+                                <span className="min-w-0 flex-1 truncate">
+                                  {thread.title}
+                                </span>
+                                <span className="ml-auto shrink-0 text-[11px] text-sidebar-foreground/50">
+                                  {thread.updatedAt}
+                                </span>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      ) : null}
+                    </CollapsibleContent>
+                </Collapsible>
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarRail />
     </Sidebar>
   )
 }
