@@ -122,7 +122,9 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-              <span className="truncate font-semibold text-base py-1">Frame</span>
+              <span className="truncate py-1 text-base font-semibold">
+                Frame
+              </span>
             </div>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -150,35 +152,37 @@ export function AppSidebar() {
                   defaultOpen={folder.threads.some((t) => t.isActive)}
                   className="group/collapsible"
                 >
-                    <CollapsibleTrigger render={<SidebarMenuButton tooltip={folder.name} />}>
-                        <FolderIcon className="group-data-[panel-open]/menu-button:hidden group-hover/menu-button:!hidden" />
-                        <FolderOpenIcon className="hidden group-data-[panel-open]/menu-button:block group-hover/menu-button:!hidden" />
-                        <ChevronRight className="hidden group-hover/menu-button:!block transition-transform duration-200 group-data-[panel-open]/menu-button:rotate-90" />
-                        <span>{folder.name}</span>
-                    </CollapsibleTrigger>
-                    <SidebarMenuBadge>{folder.threads.length}</SidebarMenuBadge>
-                    <CollapsibleContent>
-                      {folder.threads.length > 0 ? (
-                        <SidebarMenuSub>
-                          {folder.threads.map((thread) => (
-                            <SidebarMenuSubItem key={thread.id}>
-                              <SidebarMenuSubButton
-                                href="#"
-                                isActive={thread.isActive}
-                              >
-                                <MessageSquareIcon />
-                                <span className="min-w-0 flex-1 truncate">
-                                  {thread.title}
-                                </span>
-                                <span className="ml-auto shrink-0 text-[11px] text-sidebar-foreground/50">
-                                  {thread.updatedAt}
-                                </span>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
-                        </SidebarMenuSub>
-                      ) : null}
-                    </CollapsibleContent>
+                  <CollapsibleTrigger
+                    render={<SidebarMenuButton tooltip={folder.name} />}
+                  >
+                    <FolderIcon className="group-hover/menu-button:!hidden group-data-[panel-open]/menu-button:hidden" />
+                    <FolderOpenIcon className="hidden group-hover/menu-button:!hidden group-data-[panel-open]/menu-button:block" />
+                    <ChevronRight className="hidden transition-transform duration-200 group-hover/menu-button:!block group-data-[panel-open]/menu-button:rotate-90" />
+                    <span>{folder.name}</span>
+                  </CollapsibleTrigger>
+                  <SidebarMenuBadge>{folder.threads.length}</SidebarMenuBadge>
+                  <CollapsibleContent>
+                    {folder.threads.length > 0 ? (
+                      <SidebarMenuSub>
+                        {folder.threads.map((thread) => (
+                          <SidebarMenuSubItem key={thread.id}>
+                            <SidebarMenuSubButton
+                              href="#"
+                              isActive={thread.isActive}
+                            >
+                              <MessageSquareIcon />
+                              <span className="min-w-0 flex-1 truncate">
+                                {thread.title}
+                              </span>
+                              <span className="ml-auto shrink-0 text-[11px] text-sidebar-foreground/50">
+                                {thread.updatedAt}
+                              </span>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    ) : null}
+                  </CollapsibleContent>
                 </Collapsible>
               ))}
             </SidebarMenu>

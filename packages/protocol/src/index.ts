@@ -76,7 +76,9 @@ export type BrowserServerRequestRespondMessage = z.infer<
 export type BrowserSessionCloseMessage = z.infer<
   typeof browserSessionCloseSchema
 >
-export type BrowserToServerMessage = z.infer<typeof browserToServerMessageSchema>
+export type BrowserToServerMessage = z.infer<
+  typeof browserToServerMessageSchema
+>
 
 export const serverSessionReadySchema = z.object({
   type: z.literal("session.ready"),
@@ -133,4 +135,6 @@ export type ServerRpcNotificationMessage = z.infer<
 >
 export type ServerRequestMessage = z.infer<typeof serverRequestMessageSchema>
 export type ServerSessionErrorMessage = z.infer<typeof serverSessionErrorSchema>
-export type ServerToBrowserMessage = z.infer<typeof serverToBrowserMessageSchema>
+export type ServerToBrowserMessage = z.infer<
+  typeof serverToBrowserMessageSchema
+>
