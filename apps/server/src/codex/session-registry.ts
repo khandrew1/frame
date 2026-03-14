@@ -3,7 +3,7 @@ import { spawn } from "node:child_process"
 import { CodexSession, type ChildProcessLike } from "./session.js"
 import type {
   BrowserToServerMessage,
-  JsonRpcResponse,
+  CodexServerRequestResponse,
   ServerToBrowserMessage,
 } from "@workspace/protocol"
 import type { WebSocket as NodeWebSocket } from "ws"
@@ -160,7 +160,9 @@ export class SessionRegistry {
         })
         return
       case "serverRequest.respond":
-        record.session.sendServerRequestResponse(message.message as JsonRpcResponse)
+        record.session.sendServerRequestResponse(
+          message.message as CodexServerRequestResponse
+        )
         return
       case "session.close":
         this.closeSession(sessionId)

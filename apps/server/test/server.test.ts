@@ -188,6 +188,161 @@ describe("server smoke test", () => {
     })
   })
 
+  it("forwards server request responses back to the child process", async () => {
+    const fake = new FakeChildProcess()
+    const config = loadConfig()
+    const registry = new SessionRegistry({
+      reconnectTtlMs: 50,
+      initializeTimeoutMs: 100,
+      experimentalApi: false,
+      clientInfo: config.clientInfo,
+      spawnProcess: () => fake,
+    })
+    queueMicrotask(() => {
+      fake.send({ id: 0, result: {} })
+    })
+
+    const app = createApp(config, registry)
+    const server = createHttpServer(app, registry)
+    servers.push(server)
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, resolve)
+    })
+
+    const address = server.address()
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP server address.")
+    }
+
+    const baseUrl = `http://127.0.0.1:${address.port}`
+    const createResponse = await fetch(`${baseUrl}/api/sessions`, {
+      method: "POST",
+    })
+    const createPayload = (await createResponse.json()) as {
+      sessionId: string
+      wsUrl: string
+    }
+
+    const socket = new WebSocket(createPayload.wsUrl)
+    sockets.push(socket)
+    await waitForOpen(socket)
+    await waitForMessage(socket)
+
+    socket.send(
+      JSON.stringify({
+        type: "serverRequest.respond",
+        message: {
+          id: "question-1",
+          result: {
+            answers: {
+              workspace: {
+                answers: ["Use the current repo"],
+              },
+            },
+          },
+        },
+      })
+    )
+
+    await waitForCondition(() =>
+      fake.writtenMessages.some(
+        (message) =>
+          typeof message === "object" &&
+          message !== null &&
+          "id" in message &&
+          message.id === "question-1"
+      )
+    )
+
+    expect(fake.writtenMessages).toContainEqual({
+      id: "question-1",
+      result: {
+        answers: {
+          workspace: {
+            answers: ["Use the current repo"],
+          },
+        },
+      },
+    })
+  })
+
+  it("rejects browser initialize requests before forwarding them to codex", async () => {
+    const fake = new FakeChildProcess()
+    const config = loadConfig()
+    const registry = new SessionRegistry({
+      reconnectTtlMs: 50,
+      initializeTimeoutMs: 100,
+      experimentalApi: false,
+      clientInfo: config.clientInfo,
+      spawnProcess: () => fake,
+    })
+    queueMicrotask(() => {
+      fake.send({ id: 0, result: {} })
+    })
+
+    const app = createApp(config, registry)
+    const server = createHttpServer(app, registry)
+    servers.push(server)
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, resolve)
+    })
+
+    const address = server.address()
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP server address.")
+    }
+
+    const baseUrl = `http://127.0.0.1:${address.port}`
+    const createResponse = await fetch(`${baseUrl}/api/sessions`, {
+      method: "POST",
+    })
+    const createPayload = (await createResponse.json()) as {
+      sessionId: string
+      wsUrl: string
+    }
+
+    const socket = new WebSocket(createPayload.wsUrl)
+    sockets.push(socket)
+    await waitForOpen(socket)
+    await waitForMessage(socket)
+
+    socket.send(
+      JSON.stringify({
+        type: "rpc.request",
+        message: {
+          id: 11,
+          method: "initialize",
+          params: {
+            clientInfo: {
+              name: "bad_client",
+              title: "Bad Client",
+              version: "0.0.1",
+            },
+          },
+        },
+      })
+    )
+
+    const error = await waitForMessage(socket)
+    expect(error).toEqual({
+      type: "session.error",
+      code: "invalid_message",
+      message: "Invalid browser WebSocket message.",
+      retryable: false,
+    })
+
+    const initializeWrites = fake.writtenMessages.filter(
+      (message) =>
+        typeof message === "object" &&
+        message !== null &&
+        "method" in message &&
+        message.method === "initialize"
+    )
+    expect(initializeWrites).toHaveLength(1)
+  })
+
   it("returns a degraded health response when codex is unavailable", async () => {
     const config = {
       ...loadConfig(),

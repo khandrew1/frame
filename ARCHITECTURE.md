@@ -270,17 +270,16 @@ It currently contains:
   - `serverRequest.request`
   - `session.error`
 
-Important limitation:
+Current state:
 
-- these are hand-written wrapper schemas
-- they do not yet include the generated Codex app-server method-by-method schema
+- the wrapper transport messages are still defined locally in `packages/protocol`
+- the inner Codex request / notification / server-request unions now come from generated `codex app-server generate-ts` output checked into `packages/protocol/src/generated/codex`
+- runtime validation remains envelope-level plus method-name filtering
+- compile-time safety for stable app-server methods now comes from the generated TypeScript bindings
 
-That means:
+Operational note:
 
-- the transport envelope is typed
-- the inner Codex `params` and `result` payloads are mostly `unknown`
-
-This is good enough for a transport bridge, but not ideal for long-term API safety.
+- regenerate the checked-in Codex bindings with `pnpm --filter @workspace/protocol codex:generate` whenever the local Codex CLI version changes
 
 ## Message flow in detail
 
@@ -365,6 +364,8 @@ Current coverage includes:
 - initialize handshake
 - forwarding notifications
 - routing server-initiated requests
+- forwarding `serverRequest.respond` payloads back to the child process
+- rejecting browser-side `initialize` requests before they reach Codex
 - child exit behavior
 - spawn-error fast failure
 - degraded health check when `codex` is unavailable
@@ -384,7 +385,6 @@ Missing or partial areas:
 - no metrics, structured logging, or tracing
 - no rate limiting or abuse controls on `POST /api/sessions`
 - no cleanup policy based on max session count or memory pressure
-- no generated Codex app-server schema integration
 - no frontend integration layer yet in `apps/web`
 - no higher-level SDK for the frontend to consume this transport
 - no handling for some operational edge cases, such as explicit backpressure or process pools
@@ -393,19 +393,7 @@ Missing or partial areas:
 
 These are the highest-value follow-ups.
 
-### 1. Replace hand-written inner Codex payload typing with generated schema
-
-Preferred direction:
-
-- run:
-  - `codex app-server generate-ts --out ./schemas`
-  - `codex app-server generate-json-schema --out ./schemas`
-- check the generated artifacts into the repo
-- wire `packages/protocol` to use generated Codex request/response payload types
-
-This should be the next major contract improvement.
-
-### 2. Build a frontend transport client
+### 1. Build a frontend transport client
 
 Add a small browser-side client in `apps/web` or `packages/` that:
 
@@ -417,7 +405,7 @@ Add a small browser-side client in `apps/web` or `packages/` that:
 
 Right now the protocol is usable, but the frontend does not yet have a dedicated client abstraction.
 
-### 3. Add stronger lifecycle controls
+### 2. Add stronger lifecycle controls
 
 Useful next controls:
 
@@ -427,7 +415,7 @@ Useful next controls:
 - explicit session status endpoint
 - better reconnection semantics than "same session id within TTL"
 
-### 4. Add structured logs and observability
+### 3. Add structured logs and observability
 
 At minimum:
 

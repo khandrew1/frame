@@ -7,9 +7,14 @@ import {
   JsonLineParser,
 } from "./jsonl.js"
 import {
+  type CodexClientNotification,
+  type CodexClientRequest,
+  type CodexServerRequestResponse,
+  isCodexServerNotification,
+  isCodexServerRequest,
   jsonRpcMessageSchema,
+  type JsonRpcError,
   type JsonRpcId,
-  type JsonRpcNotification,
   type JsonRpcRequest,
   type JsonRpcResponse,
   type ServerToBrowserMessage,
@@ -54,6 +59,10 @@ function isResponse(message: unknown): message is JsonRpcResponse {
     "id" in message &&
     ("result" in message || "error" in message)
   )
+}
+
+function isErrorResponse(message: JsonRpcResponse): message is JsonRpcError {
+  return "error" in message
 }
 
 function isRequest(message: unknown): message is JsonRpcRequest {
@@ -102,13 +111,12 @@ export class CodexSession extends EventEmitter<SessionEventMap> {
   async initialize() {
     this.#wireProcess()
 
-    const params: {
-      clientInfo: SessionOptions["clientInfo"]
-      capabilities?: {
-        experimentalApi: true
-      }
-    } = {
+    const params: Extract<
+      CodexClientRequest,
+      { method: "initialize" }
+    >["params"] = {
       clientInfo: this.#clientInfo,
+      capabilities: null,
     }
 
     if (this.#experimentalApi) {
@@ -126,14 +134,13 @@ export class CodexSession extends EventEmitter<SessionEventMap> {
       { timeoutMs: this.#initializeTimeoutMs }
     )
 
-    if ("error" in response) {
+    if (isErrorResponse(response)) {
       const message = response.error.message || "Codex initialize failed."
       throw new Error(message)
     }
 
     this.sendNotification({
       method: "initialized",
-      params: {},
     })
 
     this.#isReady = true
@@ -141,7 +148,7 @@ export class CodexSession extends EventEmitter<SessionEventMap> {
   }
 
   sendRequest(
-    message: JsonRpcRequest,
+    message: CodexClientRequest,
     options?: {
       timeoutMs?: number
     }
@@ -175,11 +182,11 @@ export class CodexSession extends EventEmitter<SessionEventMap> {
     })
   }
 
-  sendNotification(message: JsonRpcNotification) {
+  sendNotification(message: CodexClientNotification) {
     this.#write(message)
   }
 
-  sendServerRequestResponse(message: JsonRpcResponse) {
+  sendServerRequestResponse(message: CodexServerRequestResponse) {
     this.#write(message)
   }
 
@@ -200,7 +207,9 @@ export class CodexSession extends EventEmitter<SessionEventMap> {
     return this.#isReady
   }
 
-  #write(message: JsonRpcRequest | JsonRpcNotification | JsonRpcResponse) {
+  #write(
+    message: CodexClientRequest | CodexClientNotification | JsonRpcResponse
+  ) {
     this.#process.stdin.write(encodeJsonLine(message))
   }
 
@@ -296,10 +305,32 @@ export class CodexSession extends EventEmitter<SessionEventMap> {
     }
 
     if (isRequest(parsed.data)) {
+      if (!isCodexServerRequest(parsed.data)) {
+        this.emit(
+          "message",
+          toErrorMessage(
+            "protocol_error",
+            `Received unsupported server request method ${parsed.data.method}.`
+          )
+        )
+        return
+      }
+
       this.emit("message", {
         type: "serverRequest.request",
         message: parsed.data,
       })
+      return
+    }
+
+    if (!isCodexServerNotification(parsed.data)) {
+      this.emit(
+        "message",
+        toErrorMessage(
+          "protocol_error",
+          `Received unsupported server notification method ${parsed.data.method}.`
+        )
+      )
       return
     }
 
