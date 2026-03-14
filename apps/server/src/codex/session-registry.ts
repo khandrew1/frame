@@ -164,11 +164,7 @@ export class SessionRegistry {
         return
       case "serverRequest.respond":
         record.session.sendServerRequestResponse(
-<<<<<<< HEAD
           message.message as CodexServerRequestResponse
-=======
-          message.message as JsonRpcResponse
->>>>>>> cd26470439048cae1a30f4184ccade0690bfa4ba
         )
         return
       case "session.close":

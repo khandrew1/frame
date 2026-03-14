@@ -1,13 +1,9 @@
-import type {
-  CodexBrowserRequest,
-  CodexServerRequest,
-} from "./index.js"
+import type { CodexBrowserRequest, CodexServerRequest } from "./index.js"
 
-type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <
-  T,
->() => T extends B ? 1 : 2
-  ? true
-  : false
+type Equal<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? true
+    : false
 
 type NotNever<T> = [T] extends [never] ? false : true
 type Expect<T extends true> = T

@@ -13,33 +13,30 @@ import type { ToolRequestUserInputResponse } from "./generated/codex/v2/ToolRequ
 export type CodexClientRequest = ClientRequest
 export type CodexClientNotification = ClientNotification
 
-const legacyBrowserRequestMethods = [
-  "newConversation",
-  "getConversationSummary",
-  "listConversations",
-  "resumeConversation",
-  "forkConversation",
-  "archiveConversation",
-  "sendUserMessage",
-  "sendUserTurn",
-  "interruptConversation",
-  "addConversationListener",
-  "removeConversationListener",
-  "gitDiffToRemote",
-  "loginApiKey",
-  "loginChatGpt",
-  "cancelLoginChatGpt",
-  "logoutChatGpt",
-  "getAuthStatus",
-  "getUserSavedConfig",
-  "setDefaultModel",
-  "getUserAgent",
-  "userInfo",
-  "fuzzyFileSearch",
-  "execOneOffCommand",
-] as const
-
-type LegacyBrowserRequestMethod = (typeof legacyBrowserRequestMethods)[number]
+type LegacyBrowserRequestMethod =
+  | "newConversation"
+  | "getConversationSummary"
+  | "listConversations"
+  | "resumeConversation"
+  | "forkConversation"
+  | "archiveConversation"
+  | "sendUserMessage"
+  | "sendUserTurn"
+  | "interruptConversation"
+  | "addConversationListener"
+  | "removeConversationListener"
+  | "gitDiffToRemote"
+  | "loginApiKey"
+  | "loginChatGpt"
+  | "cancelLoginChatGpt"
+  | "logoutChatGpt"
+  | "getAuthStatus"
+  | "getUserSavedConfig"
+  | "setDefaultModel"
+  | "getUserAgent"
+  | "userInfo"
+  | "fuzzyFileSearch"
+  | "execOneOffCommand"
 type BrowserExcludedMethod = "initialize" | LegacyBrowserRequestMethod
 
 export type CodexBrowserRequest = Exclude<
