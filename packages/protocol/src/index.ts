@@ -60,6 +60,8 @@ type CodexServerRequestSuccessResult =
   | FileChangeRequestApprovalResponse
   | ToolRequestUserInputResponse
 
+type AssertNever<T extends never> = T
+
 export const codexBrowserRequestMethods = [
   "thread/start",
   "thread/resume",
@@ -98,6 +100,10 @@ export const codexBrowserRequestMethods = [
   "configRequirements/read",
   "account/read",
 ] as const satisfies readonly CodexBrowserRequest["method"][]
+
+void (0 as AssertNever<
+  Exclude<CodexBrowserRequest["method"], (typeof codexBrowserRequestMethods)[number]>
+>)
 
 export const codexServerNotificationMethods = [
   "error",
@@ -141,6 +147,10 @@ export const codexServerRequestMethods = [
   "item/tool/call",
   "account/chatgptAuthTokens/refresh",
 ] as const satisfies readonly CodexServerRequest["method"][]
+
+void (0 as AssertNever<
+  Exclude<CodexServerRequest["method"], (typeof codexServerRequestMethods)[number]>
+>)
 
 const codexBrowserRequestMethodSet = new Set<string>(codexBrowserRequestMethods)
 const codexServerNotificationMethodSet = new Set<string>(
