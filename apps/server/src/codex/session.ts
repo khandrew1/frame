@@ -2,10 +2,7 @@ import { EventEmitter } from "node:events"
 import { randomUUID } from "node:crypto"
 import type { Readable, Writable } from "node:stream"
 
-import {
-  encodeJsonLine,
-  JsonLineParser,
-} from "./jsonl.js"
+import { encodeJsonLine, JsonLineParser } from "./jsonl.js"
 import {
   type CodexClientNotification,
   type CodexClientRequest,
@@ -159,7 +156,9 @@ export class CodexSession extends EventEmitter<SessionEventMap> {
           ? null
           : setTimeout(() => {
               this.#pendingRequests.delete(message.id)
-              reject(new Error(`Timed out waiting for ${message.method} response.`))
+              reject(
+                new Error(`Timed out waiting for ${message.method} response.`)
+              )
             }, options.timeoutMs)
 
       this.#pendingRequests.set(message.id, {
@@ -225,7 +224,9 @@ export class CodexSession extends EventEmitter<SessionEventMap> {
           "message",
           toErrorMessage(
             "invalid_message",
-            error instanceof Error ? error.message : "Failed to parse child output."
+            error instanceof Error
+              ? error.message
+              : "Failed to parse child output."
           )
         )
       }
@@ -247,14 +248,7 @@ export class CodexSession extends EventEmitter<SessionEventMap> {
           : "Failed to start Codex app-server."
 
       this.#rejectPendingRequests(new Error(message))
-      this.emit(
-        "message",
-        toErrorMessage(
-          "spawn_failed",
-          message,
-          true
-        )
-      )
+      this.emit("message", toErrorMessage("spawn_failed", message, true))
     })
 
     this.#process.on("exit", (code, signal) => {
@@ -277,7 +271,9 @@ export class CodexSession extends EventEmitter<SessionEventMap> {
   #handleIncomingMessage(message: unknown) {
     const parsed = jsonRpcMessageSchema.safeParse(message)
     if (!parsed.success) {
-      throw new Error("Received invalid JSON-RPC message from Codex app-server.")
+      throw new Error(
+        "Received invalid JSON-RPC message from Codex app-server."
+      )
     }
 
     if (isResponse(parsed.data)) {

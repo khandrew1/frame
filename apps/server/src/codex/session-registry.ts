@@ -6,7 +6,7 @@ import type {
   CodexServerRequestResponse,
   ServerToBrowserMessage,
 } from "@workspace/protocol"
-import type { WebSocket as NodeWebSocket } from "ws"
+import { WebSocket, type WebSocket as NodeWebSocket } from "ws"
 
 type SpawnProcess = () => ChildProcessLike
 
@@ -141,7 +141,10 @@ export class SessionRegistry {
     this.#scheduleExpiry(sessionId, record)
   }
 
-  async handleBrowserMessage(sessionId: string, message: BrowserToServerMessage) {
+  async handleBrowserMessage(
+    sessionId: string,
+    message: BrowserToServerMessage
+  ) {
     const record = this.#sessions.get(sessionId)
     if (!record) {
       throw new Error("Session was not found.")
@@ -161,7 +164,11 @@ export class SessionRegistry {
         return
       case "serverRequest.respond":
         record.session.sendServerRequestResponse(
+<<<<<<< HEAD
           message.message as CodexServerRequestResponse
+=======
+          message.message as JsonRpcResponse
+>>>>>>> cd26470439048cae1a30f4184ccade0690bfa4ba
         )
         return
       case "session.close":
@@ -185,7 +192,11 @@ export class SessionRegistry {
 
   #sendToSocket(sessionId: string, message: ServerToBrowserMessage) {
     const record = this.#sessions.get(sessionId)
-    if (!record || !record.socket || record.socket.readyState !== WebSocket.OPEN) {
+    if (
+      !record ||
+      !record.socket ||
+      record.socket.readyState !== WebSocket.OPEN
+    ) {
       return
     }
 

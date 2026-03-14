@@ -5,7 +5,9 @@ import { encodeJsonLine, JsonLineParser } from "../src/codex/jsonl.js"
 describe("JsonLineParser", () => {
   it("parses newline-delimited JSON payloads", () => {
     const parser = new JsonLineParser()
-    const messages = parser.push('{"id":1,"result":{}}\n{"method":"turn/started"}\n')
+    const messages = parser.push(
+      '{"id":1,"result":{}}\n{"method":"turn/started"}\n'
+    )
 
     expect(messages).toEqual([
       { id: 1, result: {} },

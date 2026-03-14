@@ -1,4 +1,7 @@
+import { once } from "node:events"
+
 import { afterEach, describe, expect, it } from "vitest"
+import { WebSocket } from "ws"
 
 import { loadConfig } from "../src/config.js"
 import { SessionRegistry } from "../src/codex/session-registry.js"
@@ -11,22 +14,15 @@ async function waitForOpen(socket: WebSocket) {
     return
   }
 
-  await new Promise<void>((resolve, reject) => {
-    socket.addEventListener("open", () => resolve(), { once: true })
-    socket.addEventListener("error", (event) => reject(event), { once: true })
-  })
+  await Promise.race([
+    once(socket, "open").then(() => undefined),
+    once(socket, "error").then(([error]) => Promise.reject(error)),
+  ])
 }
 
 async function waitForMessage(socket: WebSocket) {
-  return new Promise<unknown>((resolve) => {
-    socket.addEventListener(
-      "message",
-      (event) => {
-        resolve(JSON.parse(String(event.data)))
-      },
-      { once: true }
-    )
-  })
+  const [data] = await once(socket, "message")
+  return JSON.parse(data.toString())
 }
 
 async function waitForCondition(check: () => boolean, timeoutMs = 1_000) {
@@ -46,10 +42,9 @@ async function closeSocket(socket: WebSocket) {
     return
   }
 
-  await new Promise<void>((resolve) => {
-    socket.addEventListener("close", () => resolve(), { once: true })
-    socket.close()
-  })
+  const closePromise = once(socket, "close").then(() => undefined)
+  socket.close()
+  await closePromise
 }
 
 describe("server smoke test", () => {
@@ -116,14 +111,16 @@ describe("server smoke test", () => {
 
     const socket = new WebSocket(createPayload.wsUrl)
     sockets.push(socket)
+    const readyMessagePromise = waitForMessage(socket)
     await waitForOpen(socket)
 
-    const readyMessage = await waitForMessage(socket)
+    const readyMessage = await readyMessagePromise
     expect(readyMessage).toEqual({
       type: "session.ready",
       sessionId: createPayload.sessionId,
     })
 
+    const notificationPromise = waitForMessage(socket)
     fake.send({
       method: "turn/started",
       params: {
@@ -131,7 +128,7 @@ describe("server smoke test", () => {
       },
     })
 
-    const notification = await waitForMessage(socket)
+    const notification = await notificationPromise
     expect(notification).toEqual({
       type: "rpc.notification",
       message: {
@@ -165,6 +162,7 @@ describe("server smoke test", () => {
       )
     )
 
+    const responsePromise = waitForMessage(socket)
     fake.send({
       id: 10,
       result: {
@@ -174,7 +172,7 @@ describe("server smoke test", () => {
       },
     })
 
-    const response = await waitForMessage(socket)
+    const response = await responsePromise
     expect(response).toEqual({
       type: "rpc.response",
       message: {

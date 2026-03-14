@@ -95,7 +95,9 @@ export function attachWebSocketServer(
               type: "session.error",
               code: "protocol_error",
               message:
-                error instanceof Error ? error.message : "Failed to process message.",
+                error instanceof Error
+                  ? error.message
+                  : "Failed to process message.",
               retryable: false,
             })
           )
