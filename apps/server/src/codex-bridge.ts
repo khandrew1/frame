@@ -37,7 +37,9 @@ function isJsonRpcRequest(message: unknown): message is JsonRpcRequest {
   )
 }
 
-function isJsonRpcNotification(message: unknown): message is JsonRpcNotification {
+function isJsonRpcNotification(
+  message: unknown
+): message is JsonRpcNotification {
   return (
     typeof message === "object" &&
     message !== null &&
@@ -153,16 +155,16 @@ export class CodexBridge {
     this.#process.on(
       "exit",
       (code: number | null, signal: NodeJS.Signals | null) => {
-      if (this.#closed) {
-        return
-      }
+        if (this.#closed) {
+          return
+        }
 
-      const message =
-        signal === null
-          ? `Codex app-server exited with code ${code ?? 0}.`
-          : `Codex app-server exited from signal ${signal}.`
+        const message =
+          signal === null
+            ? `Codex app-server exited with code ${code ?? 0}.`
+            : `Codex app-server exited from signal ${signal}.`
 
-      this.#closeWithInternalError(message)
+        this.#closeWithInternalError(message)
       }
     )
   }
@@ -221,7 +223,9 @@ export class CodexBridge {
       this.#initializeRequestSeen = true
       this.#initializeRequestId = message.id
       this.#initializeTimer = setTimeout(() => {
-        this.#closeWithInternalError("Timed out waiting for initialize response.")
+        this.#closeWithInternalError(
+          "Timed out waiting for initialize response."
+        )
       }, this.#config.initializeTimeoutMs)
       this.#writeUpstream(message)
       return
@@ -286,13 +290,18 @@ export class CodexBridge {
   #handleUpstreamMessage(message: unknown) {
     const parsed = jsonRpcMessageSchema.safeParse(message)
     if (!parsed.success) {
-      this.#closeWithInternalError("Received invalid JSON-RPC message from codex.")
+      this.#closeWithInternalError(
+        "Received invalid JSON-RPC message from codex."
+      )
       return
     }
 
     const jsonRpcMessage = parsed.data
     if (isJsonRpcResponse(jsonRpcMessage)) {
-      if (this.#initializeRequestId !== null && jsonRpcMessage.id === this.#initializeRequestId) {
+      if (
+        this.#initializeRequestId !== null &&
+        jsonRpcMessage.id === this.#initializeRequestId
+      ) {
         if (this.#initializeTimer) {
           clearTimeout(this.#initializeTimer)
           this.#initializeTimer = null

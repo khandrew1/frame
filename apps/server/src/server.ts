@@ -1,9 +1,17 @@
 import { spawn, spawnSync } from "node:child_process"
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http"
 
 import { WebSocketServer } from "ws"
 
-import { CodexBridge, type ChildProcessLike, type SpawnProcess } from "./codex-bridge.js"
+import {
+  CodexBridge,
+  type ChildProcessLike,
+  type SpawnProcess,
+} from "./codex-bridge.js"
 import type { ServerV2Config } from "./config.js"
 
 type HealthPayload = {

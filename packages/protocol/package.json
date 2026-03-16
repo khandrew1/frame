@@ -7,6 +7,7 @@
     "codex:generate": "node ./scripts/generate-codex-types.mjs && node ./scripts/generate-codex-json-schema.mjs",
     "build": "tsc -p tsconfig.build.json && node ./scripts/copy-generated-assets.mjs",
     "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.ts\" \"scripts/**/*.mjs\" \"*.json\"",
     "typecheck": "tsc --noEmit"
   },
   "exports": {

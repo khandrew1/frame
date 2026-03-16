@@ -8,6 +8,7 @@
     "build": "pnpm --filter @workspace/protocol build && tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"*.{json,md}\"",
     "typecheck": "tsc --noEmit",
     "test": "pnpm --filter @workspace/protocol build && vitest run"
   },

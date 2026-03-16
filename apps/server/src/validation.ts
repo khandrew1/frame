@@ -35,7 +35,9 @@ function formatErrors(errors: ErrorObject[] | null | undefined) {
   }
 
   return errors
-    .map((error) => `${error.instancePath || "/"} ${error.message || "invalid"}`)
+    .map(
+      (error) => `${error.instancePath || "/"} ${error.message || "invalid"}`
+    )
     .join("; ")
 }
 
@@ -117,7 +119,10 @@ export function createBrowserMessageValidator(): BrowserMessageValidator {
         }
       }
 
-      if (hasOwn(message, "id") && (hasOwn(message, "result") || hasOwn(message, "error"))) {
+      if (
+        hasOwn(message, "id") &&
+        (hasOwn(message, "result") || hasOwn(message, "error"))
+      ) {
         if (validateJsonRpcResponse(message) || validateJsonRpcError(message)) {
           return { ok: true, value: message as JsonRpcResponse }
         }
