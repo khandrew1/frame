@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { fileURLToPath } from "node:url"
 
 import type { ClientNotification } from "./generated/codex/ClientNotification.js"
 import type { ClientRequest } from "./generated/codex/ClientRequest.js"
@@ -350,3 +351,12 @@ export type ServerToBrowserMessage =
   | ServerRpcNotificationMessage
   | ServerRequestMessage
   | ServerSessionErrorMessage
+
+export function getCodexSchemaBundlePath() {
+  return fileURLToPath(
+    new URL(
+      "./generated/schemas/codex_app_server_protocol.schemas.json",
+      import.meta.url
+    )
+  )
+}

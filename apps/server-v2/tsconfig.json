@@ -14,7 +14,10 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "erasableSyntaxOnly": true,
-    "baseUrl": "."
+    "baseUrl": ".",
+    "paths": {
+      "@workspace/protocol": ["../../packages/protocol/src/index.ts"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }
