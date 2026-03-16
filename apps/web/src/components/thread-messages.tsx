@@ -39,8 +39,7 @@ export function ThreadMessages({
             {getEmptyStateCopy(status, threadId)}
           </p>
           <p className="text-xs text-muted-foreground">
-            Thread messages stream directly over the `server` WebSocket
-            bridge.
+            Thread messages stream directly over the `server` WebSocket bridge.
           </p>
         </div>
       </div>
