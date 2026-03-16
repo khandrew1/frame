@@ -9,7 +9,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "@workspace/protocol": path.resolve(__dirname, "../../packages/protocol/src"),
+      "@workspace/protocol": path.resolve(
+        __dirname,
+        "../../packages/protocol/src"
+      ),
     },
   },
 })

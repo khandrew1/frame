@@ -39,4 +39,3 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
 })
-

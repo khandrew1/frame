@@ -68,7 +68,7 @@ export function App() {
           <div className="mx-auto mb-4 flex w-full max-w-4xl flex-col gap-3 rounded-3xl border bg-card/60 p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                <p className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">
                   {getStatusLabel(status)}
                 </p>
                 <p className="text-sm text-foreground">
@@ -77,7 +77,9 @@ export function App() {
                     : "No thread started yet."}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {thread ? `cwd: ${thread.cwd}` : "Connect, then start a thread manually."}
+                  {thread
+                    ? `cwd: ${thread.cwd}`
+                    : "Connect, then start a thread manually."}
                 </p>
               </div>
               <Button

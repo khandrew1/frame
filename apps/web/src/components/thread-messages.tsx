@@ -39,7 +39,8 @@ export function ThreadMessages({
             {getEmptyStateCopy(status, threadId)}
           </p>
           <p className="text-xs text-muted-foreground">
-            Thread messages stream directly over the `server-v2` WebSocket bridge.
+            Thread messages stream directly over the `server-v2` WebSocket
+            bridge.
           </p>
         </div>
       </div>
@@ -57,7 +58,7 @@ export function ThreadMessages({
               : "mr-auto max-w-[85%] rounded-3xl border bg-card px-4 py-3 text-sm"
           }
         >
-          <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] opacity-70">
+          <div className="mb-1 flex items-center gap-2 text-[11px] tracking-[0.16em] uppercase opacity-70">
             <span>{message.role === "user" ? "You" : "Assistant"}</span>
             <span>{message.status}</span>
           </div>
@@ -67,4 +68,3 @@ export function ThreadMessages({
     </div>
   )
 }
-

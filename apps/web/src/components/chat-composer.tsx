@@ -128,7 +128,11 @@ export function ChatComposer({
                       onSelectModel(model.id)
                     }}
                   >
-                    <span className={cn(model.id === selectedModelId && "font-semibold")}>
+                    <span
+                      className={cn(
+                        model.id === selectedModelId && "font-semibold"
+                      )}
+                    >
                       {model.displayName}
                     </span>
                   </DropdownMenuItem>
@@ -156,7 +160,11 @@ export function ChatComposer({
                       onSelectEffort(effort)
                     }}
                   >
-                    <span className={cn(effort === selectedEffort && "font-semibold")}>
+                    <span
+                      className={cn(
+                        effort === selectedEffort && "font-semibold"
+                      )}
+                    >
                       {effort === "xhigh"
                         ? "X-High"
                         : effort.charAt(0).toUpperCase() + effort.slice(1)}

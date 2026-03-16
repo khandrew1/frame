@@ -1,4 +1,10 @@
-import { startTransition, useEffect, useEffectEvent, useReducer, useRef } from "react"
+import {
+  startTransition,
+  useEffect,
+  useEffectEvent,
+  useReducer,
+  useRef,
+} from "react"
 
 import type { ReasoningEffort } from "@workspace/protocol/generated/codex/ReasoningEffort"
 import type { ServerNotification } from "@workspace/protocol/generated/codex/ServerNotification"
@@ -65,9 +71,17 @@ type ThreadAction =
   | { type: "thread.ready"; thread: Thread }
   | { type: "turn.sending"; message: ThreadMessage }
   | { type: "turn.accepted"; turnId: string }
-  | { type: "agent.started"; item: Extract<ThreadItem, { type: "agentMessage" }>; turnId: string }
+  | {
+      type: "agent.started"
+      item: Extract<ThreadItem, { type: "agentMessage" }>
+      turnId: string
+    }
   | { type: "agent.delta"; itemId: string; delta: string; turnId: string }
-  | { type: "agent.completed"; item: Extract<ThreadItem, { type: "agentMessage" }>; turnId: string }
+  | {
+      type: "agent.completed"
+      item: Extract<ThreadItem, { type: "agentMessage" }>
+      turnId: string
+    }
   | { type: "turn.completed"; turnId: string }
   | { type: "error.nonfatal"; message: string }
   | { type: "error.fatal"; message: string }
@@ -149,7 +163,10 @@ function upsertAssistantMessage(
   )
 }
 
-function reduceThreadState(state: ThreadState, action: ThreadAction): ThreadState {
+function reduceThreadState(
+  state: ThreadState,
+  action: ThreadAction
+): ThreadState {
   switch (action.type) {
     case "transport.connecting":
       return {
@@ -314,68 +331,70 @@ export function useThread() {
   const unsupportedServerRequestsRef = useRef<ServerRequest[]>([])
   const optimisticMessageCountRef = useRef(0)
 
-  const handleNotification = useEffectEvent((notification: ServerNotification) => {
-    startTransition(() => {
-      switch (notification.method) {
-        case "thread/started":
-          dispatch({
-            type: "thread.ready",
-            thread: notification.params.thread,
-          })
-          break
-        case "turn/started":
-          dispatch({
-            type: "turn.accepted",
-            turnId: notification.params.turn.id,
-          })
-          break
-        case "item/started":
-          if (notification.params.item.type !== "agentMessage") {
-            return
-          }
+  const handleNotification = useEffectEvent(
+    (notification: ServerNotification) => {
+      startTransition(() => {
+        switch (notification.method) {
+          case "thread/started":
+            dispatch({
+              type: "thread.ready",
+              thread: notification.params.thread,
+            })
+            break
+          case "turn/started":
+            dispatch({
+              type: "turn.accepted",
+              turnId: notification.params.turn.id,
+            })
+            break
+          case "item/started":
+            if (notification.params.item.type !== "agentMessage") {
+              return
+            }
 
-          dispatch({
-            type: "agent.started",
-            item: notification.params.item,
-            turnId: notification.params.turnId,
-          })
-          break
-        case "item/agentMessage/delta":
-          dispatch({
-            type: "agent.delta",
-            itemId: notification.params.itemId,
-            delta: notification.params.delta,
-            turnId: notification.params.turnId,
-          })
-          break
-        case "item/completed":
-          if (notification.params.item.type !== "agentMessage") {
-            return
-          }
+            dispatch({
+              type: "agent.started",
+              item: notification.params.item,
+              turnId: notification.params.turnId,
+            })
+            break
+          case "item/agentMessage/delta":
+            dispatch({
+              type: "agent.delta",
+              itemId: notification.params.itemId,
+              delta: notification.params.delta,
+              turnId: notification.params.turnId,
+            })
+            break
+          case "item/completed":
+            if (notification.params.item.type !== "agentMessage") {
+              return
+            }
 
-          dispatch({
-            type: "agent.completed",
-            item: notification.params.item,
-            turnId: notification.params.turnId,
-          })
-          break
-        case "turn/completed":
-          dispatch({
-            type: "turn.completed",
-            turnId: notification.params.turn.id,
-          })
-          break
-        case "error":
-          dispatch({
-            type: "error.nonfatal",
-            message: notification.params.error.message,
-          })
-          break
-        default:
-          break
-      }
-    })
-  })
+            dispatch({
+              type: "agent.completed",
+              item: notification.params.item,
+              turnId: notification.params.turnId,
+            })
+            break
+          case "turn/completed":
+            dispatch({
+              type: "turn.completed",
+              turnId: notification.params.turn.id,
+            })
+            break
+          case "error":
+            dispatch({
+              type: "error.nonfatal",
+              message: notification.params.error.message,
+            })
+            break
+          default:
+            break
+        }
+      })
+    }
+  )
 
   const handleServerRequest = useEffectEvent((request: ServerRequest) => {
     unsupportedServerRequestsRef.current = [
@@ -407,7 +426,7 @@ export function useThread() {
         type: "error.fatal",
         message: getCloseMessage(info),
       })
-      })
+    })
   })
 
   const loadModels = useEffectEvent(async () => {
@@ -620,7 +639,8 @@ export function useThread() {
     thread: state.thread,
     models: state.models,
     selectedModelId: state.selectedModelId,
-    selectedModelDisplayName: selectedModel?.displayName ?? state.selectedModelId,
+    selectedModelDisplayName:
+      selectedModel?.displayName ?? state.selectedModelId,
     selectedEffort: state.selectedEffort,
     selectedEffortLabel: formatEffortLabel(state.selectedEffort),
     availableEfforts,

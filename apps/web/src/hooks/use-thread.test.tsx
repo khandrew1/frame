@@ -274,7 +274,9 @@ describe("useThread", () => {
 
     await waitFor(() => {
       expect(result.current.status).toBe("failed")
-      expect(result.current.lastError).toBe("Codex app-server exited with code 2.")
+      expect(result.current.lastError).toBe(
+        "Codex app-server exited with code 2."
+      )
     })
   })
 })

@@ -106,9 +106,9 @@ async function connectUi() {
   })
 
   await waitFor(() => {
-    expect(screen.getByRole("button", { name: "Model selector" })).toHaveTextContent(
-      "GPT-5.4"
-    )
+    expect(
+      screen.getByRole("button", { name: "Model selector" })
+    ).toHaveTextContent("GPT-5.4")
   })
 
   return socket
@@ -128,15 +128,17 @@ describe("App", () => {
     fireEvent.click(screen.getByText("GPT-5.1 Codex"))
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Model selector" })).toHaveTextContent(
-        "GPT-5.1 Codex"
-      )
+      expect(
+        screen.getByRole("button", { name: "Model selector" })
+      ).toHaveTextContent("GPT-5.1 Codex")
       expect(
         screen.getByRole("button", { name: "Thinking level selector" })
       ).toHaveTextContent("High")
     })
 
-    fireEvent.click(screen.getByRole("button", { name: "Thinking level selector" }))
+    fireEvent.click(
+      screen.getByRole("button", { name: "Thinking level selector" })
+    )
     fireEvent.click(screen.getByText("X-High"))
 
     await waitFor(() => {

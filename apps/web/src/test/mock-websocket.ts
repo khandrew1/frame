@@ -56,8 +56,7 @@ export class MockWebSocket {
   }
 
   serverSend(message: unknown) {
-    const data =
-      typeof message === "string" ? message : JSON.stringify(message)
+    const data = typeof message === "string" ? message : JSON.stringify(message)
     this.emit("message", { data })
   }
 
@@ -102,4 +101,3 @@ export class MockWebSocket {
     }
   }
 }
-

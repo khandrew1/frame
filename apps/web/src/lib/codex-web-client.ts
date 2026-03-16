@@ -36,13 +36,14 @@ type JsonRpcError = {
   error: JsonRpcErrorObject
 }
 
-type JsonRpcResponse<TResult = unknown> =
-  | JsonRpcSuccess<TResult>
-  | JsonRpcError
+type JsonRpcResponse<TResult = unknown> = JsonRpcSuccess<TResult> | JsonRpcError
 
 export type InitializeRequest = Extract<ClientRequest, { method: "initialize" }>
 export type ModelListRequest = Extract<ClientRequest, { method: "model/list" }>
-export type ThreadStartRequest = Extract<ClientRequest, { method: "thread/start" }>
+export type ThreadStartRequest = Extract<
+  ClientRequest,
+  { method: "thread/start" }
+>
 export type TurnStartRequest = Extract<ClientRequest, { method: "turn/start" }>
 type SupportedRequest =
   | InitializeRequest
@@ -55,11 +56,11 @@ type ResponseForRequest<TRequest extends SupportedRequest> =
     ? InitializeResponse
     : TRequest extends ModelListRequest
       ? ModelListResponse
-    : TRequest extends ThreadStartRequest
-      ? ThreadStartResponse
-      : TRequest extends TurnStartRequest
-        ? TurnStartResponse
-        : never
+      : TRequest extends ThreadStartRequest
+        ? ThreadStartResponse
+        : TRequest extends TurnStartRequest
+          ? TurnStartResponse
+          : never
 
 type PendingRequest = {
   resolve: (response: JsonRpcResponse<unknown>) => void
@@ -103,7 +104,9 @@ function isJsonRpcRequest(message: unknown): message is JsonRpcRequest {
   )
 }
 
-function isJsonRpcNotification(message: unknown): message is JsonRpcNotification {
+function isJsonRpcNotification(
+  message: unknown
+): message is JsonRpcNotification {
   return (
     isObject(message) &&
     typeof message.id === "undefined" &&
@@ -129,7 +132,9 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unknown error."
 }
 
-function serialize(message: JsonRpcRequest | JsonRpcNotification | JsonRpcResponse) {
+function serialize(
+  message: JsonRpcRequest | JsonRpcNotification | JsonRpcResponse
+) {
   return JSON.stringify(message)
 }
 
@@ -158,7 +163,9 @@ export function createCodexWebClient(
     pendingRequests = new Map()
   }
 
-  const send = (message: JsonRpcRequest | JsonRpcNotification | JsonRpcResponse) => {
+  const send = (
+    message: JsonRpcRequest | JsonRpcNotification | JsonRpcResponse
+  ) => {
     if (socket === null || socket.readyState !== WebSocket.OPEN) {
       throw new Error("WebSocket is not open.")
     }
@@ -180,7 +187,9 @@ export function createCodexWebClient(
     if (isJsonRpcResponse(payload)) {
       const pending = pendingRequests.get(payload.id)
       if (!pending) {
-        options.onError(new Error(`Unexpected JSON-RPC response id: ${payload.id}`))
+        options.onError(
+          new Error(`Unexpected JSON-RPC response id: ${payload.id}`)
+        )
         return
       }
 
@@ -199,7 +208,9 @@ export function createCodexWebClient(
       return
     }
 
-    options.onError(new Error("Received an invalid JSON-RPC message from server."))
+    options.onError(
+      new Error("Received an invalid JSON-RPC message from server.")
+    )
   }
 
   const initialize = async () => {
