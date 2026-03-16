@@ -26,13 +26,13 @@ The backend is intentionally small right now. It is mostly transport and lifecyc
 
 Relevant packages:
 
-- [`apps/server`](apps/server): Node/Hono backend that talks to Codex app-server
+- The legacy server package has been removed.
 - [`apps/web`](apps/web): frontend app
 - [`packages/protocol`](packages/protocol): shared message schemas and types used between browser and backend
 
 This split is intentional:
 
-- `apps/server` contains runtime code, process management, and network I/O
+- The legacy server package has been removed from the workspace.
 - `packages/protocol` contains the transport contract that the frontend can safely import without reaching into backend internals
 
 ## High-level flow
@@ -102,7 +102,7 @@ The server also sends a fixed `clientInfo` block during Codex initialization:
 
 File:
 
-- [`apps/server/src/app.ts`](apps/server/src/app.ts)
+- The legacy `src/app.ts` entrypoint has been removed.
 
 Current endpoints:
 
@@ -128,7 +128,7 @@ The backend does not yet have auth, user identity, persistence, rate limiting, o
 
 File:
 
-- [`apps/server/src/ws.ts`](apps/server/src/ws.ts)
+- The legacy `src/ws.ts` transport has been removed.
 
 The backend uses a plain Node HTTP server plus `ws` for upgrades.
 
@@ -159,7 +159,7 @@ The server does not currently support multiple browser sockets per session. A se
 
 File:
 
-- [`apps/server/src/codex/session-registry.ts`](apps/server/src/codex/session-registry.ts)
+- The legacy `src/codex/session-registry.ts` session manager has been removed.
 
 `SessionRegistry` is the main backend coordinator.
 
@@ -196,7 +196,7 @@ This fixes a real resource leak case: a client can create a session but never at
 
 File:
 
-- [`apps/server/src/codex/session.ts`](apps/server/src/codex/session.ts)
+- The legacy `src/codex/session.ts` wrapper has been removed.
 
 `CodexSession` wraps one `codex app-server` process.
 
@@ -234,7 +234,7 @@ The session currently treats Codex messages generically. It validates JSON-RPC s
 
 File:
 
-- [`apps/server/src/codex/jsonl.ts`](apps/server/src/codex/jsonl.ts)
+- The legacy `src/codex/jsonl.ts` helper has been removed.
 
 Codex stdio uses newline-delimited JSON.
 
@@ -354,9 +354,7 @@ Notable recent fixes:
 
 Files:
 
-- [`apps/server/test/jsonl.test.ts`](apps/server/test/jsonl.test.ts)
-- [`apps/server/test/session.test.ts`](apps/server/test/session.test.ts)
-- [`apps/server/test/server.test.ts`](apps/server/test/server.test.ts)
+- Legacy server tests were removed with the package.
 
 Current coverage includes:
 
@@ -446,14 +444,14 @@ When adding those, preserve the current principle:
 
 The simplest way to think about the current system is:
 
-- `apps/server` is a session manager and transport bridge
+- The previous `apps/server` implementation was a session manager and transport bridge.
 - `packages/protocol` is the browser/backend envelope contract
 - `codex app-server` is the actual agent engine
 
 If you are debugging behavior, ask these questions in order:
 
 1. Did the browser send the correct wrapper message?
-2. Did `apps/server` forward the correct inner JSON-RPC message?
+2. Did the previous server implementation forward the correct inner JSON-RPC message?
 3. Did `codex app-server` respond or emit a notification?
 4. Did the backend classify that message correctly and relay it back to the browser?
 

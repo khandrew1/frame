@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { encodeJsonLine, JsonLineParser } from "../src/codex/jsonl.js"
+import { encodeJsonLine, JsonLineParser } from "../src/jsonl.js"
 
 describe("JsonLineParser", () => {
   it("parses newline-delimited JSON payloads", () => {
@@ -15,15 +15,15 @@ describe("JsonLineParser", () => {
     ])
   })
 
-  it("buffers partial lines until they are complete", () => {
+  it("buffers partial lines until complete", () => {
     const parser = new JsonLineParser()
     expect(parser.push('{"id":1')).toEqual([])
     expect(parser.push(',"result":{}}\n')).toEqual([{ id: 1, result: {} }])
   })
 
-  it("encodes messages as JSONL", () => {
-    expect(encodeJsonLine({ method: "initialize" })).toBe(
-      '{"method":"initialize"}\n'
+  it("encodes JSONL payloads", () => {
+    expect(encodeJsonLine({ method: "initialized" })).toBe(
+      '{"method":"initialized"}\n'
     )
   })
 })

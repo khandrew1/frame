@@ -23,49 +23,6 @@ importers:
 
   apps/server:
     dependencies:
-      '@hono/node-server':
-        specifier: 1.14.4
-        version: 1.14.4(hono@4.10.4)
-      '@workspace/protocol':
-        specifier: workspace:*
-        version: link:../../packages/protocol
-      hono:
-        specifier: 4.10.4
-        version: 4.10.4
-      ws:
-        specifier: ^8.19.0
-        version: 8.19.0
-    devDependencies:
-      '@eslint/js':
-        specifier: ^9.39.2
-        version: 9.39.3
-      '@types/node':
-        specifier: ^25.1.0
-        version: 25.3.0
-      '@types/ws':
-        specifier: ^8.18.1
-        version: 8.18.1
-      eslint:
-        specifier: ^9.39.2
-        version: 9.39.3(jiti@2.6.1)
-      globals:
-        specifier: ^17.2.0
-        version: 17.3.0
-      tsx:
-        specifier: ^4.21.0
-        version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      typescript-eslint:
-        specifier: ^8.54.0
-        version: 8.56.1(eslint@9.39.3(jiti@2.6.1))(typescript@5.9.3)
-      vitest:
-        specifier: ^4.1.0
-        version: 4.1.0(@types/node@25.3.0)(jsdom@27.4.0(@noble/hashes@1.8.0))(msw@2.12.10(@types/node@25.3.0)(typescript@5.9.3))(vite@7.3.1(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0))
-
-  apps/server-v2:
-    dependencies:
       '@workspace/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -732,12 +689,6 @@ packages:
 
   '@fontsource-variable/inter@5.2.8':
     resolution: {integrity: sha512-kOfP2D+ykbcX/P3IFnokOhVRNoTozo5/JxhAIVYLpea/UBmCQ/YWPBfWIDuBImXX/15KH+eKh4xpEUyS2sQQGQ==}
-
-  '@hono/node-server@1.14.4':
-    resolution: {integrity: sha512-DnxpshhYewr2q9ZN8ez/M5mmc3sucr8CT1sIgIy1bkeUXut9XWDkqHoFHRhWIQgkYnKpVRxunyhK7WzpJeJ6qQ==}
-    engines: {node: '>=18.14.1'}
-    peerDependencies:
-      hono: ^4
 
   '@hono/node-server@1.19.11':
     resolution: {integrity: sha512-dr8/3zEaB+p0D2n/IUrlPF1HZm586qgJNXK1a9fhg/PzdtkK7Ksd5l312tJX2yBuALqDYBlG20QEbayqPyxn+g==}
@@ -2135,10 +2086,6 @@ packages:
 
   hermes-parser@0.25.1:
     resolution: {integrity: sha512-6pEjquH3rqaI6cYAXYPcz9MS4rY6R4ngRgrgfDshRptUZIc3lw0MCIJIGDj9++mfySOuPTHB4nrSW99BCvOPIA==}
-
-  hono@4.10.4:
-    resolution: {integrity: sha512-YG/fo7zlU3KwrBL5vDpWKisLYiM+nVstBQqfr7gCPbSYURnNEP9BDxEMz8KfsDR9JX0lJWDRNc6nXX31v7ZEyg==}
-    engines: {node: '>=16.9.0'}
 
   hono@4.12.8:
     resolution: {integrity: sha512-VJCEvtrezO1IAR+kqEYnxUOoStaQPGrCmX3j4wDTNOcD1uRPFpGlwQUIW8niPuvHXaTUxeOUl5MMDGrl+tmO9A==}
@@ -3984,10 +3931,6 @@ snapshots:
 
   '@fontsource-variable/inter@5.2.8': {}
 
-  '@hono/node-server@1.14.4(hono@4.10.4)':
-    dependencies:
-      hono: 4.10.4
-
   '@hono/node-server@1.19.11(hono@4.12.8)':
     dependencies:
       hono: 4.12.8
@@ -5423,8 +5366,6 @@ snapshots:
   hermes-parser@0.25.1:
     dependencies:
       hermes-estree: 0.25.1
-
-  hono@4.10.4: {}
 
   hono@4.12.8: {}
 

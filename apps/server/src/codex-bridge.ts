@@ -137,7 +137,7 @@ export class CodexBridge {
     this.#process.stderr.on("data", (chunk: Buffer | string) => {
       const text = chunk.toString().trim()
       if (text.length > 0) {
-        console.error(`[server-v2] codex stderr: ${text}`)
+        console.error(`[server] codex stderr: ${text}`)
       }
     })
 

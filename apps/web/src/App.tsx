@@ -60,7 +60,7 @@ export function App() {
           <div className="min-w-0">
             <p className="text-sm font-medium">Thread workspace</p>
             <p className="text-xs text-muted-foreground">
-              Live `server-v2` thread test harness for `/tmp/frame-web-test`.
+              Live `server` thread test harness for `/tmp/frame-web-test`.
             </p>
           </div>
         </header>

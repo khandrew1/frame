@@ -1,14 +1,30 @@
 import { once } from "node:events"
+import { readFileSync } from "node:fs"
 
 import { afterEach, describe, expect, it } from "vitest"
-import { browserToServerMessageSchema } from "@workspace/protocol"
-import { WebSocket } from "ws"
+import { getCodexSchemaBundlePath } from "@workspace/protocol"
+import { WebSocket, type RawData } from "ws"
 
-import { loadConfig } from "../src/config.js"
-import { SessionRegistry } from "../src/codex/session-registry.js"
-import { createApp } from "../src/app.js"
-import { createHttpServer } from "../src/ws.js"
+import type { ServerV2Config } from "../src/config.js"
+import { createHttpServer } from "../src/server.js"
 import { FakeChildProcess } from "./fakes.js"
+
+function createTestConfig(
+  overrides: Partial<ServerV2Config> = {}
+): ServerV2Config {
+  return {
+    port: 8788,
+    initializeTimeoutMs: 100,
+    codexCommand: "codex",
+    codexArgs: ["app-server"],
+    clientInfo: {
+      name: "frame_server_v2",
+      title: "Frame Server V2",
+      version: "0.0.1",
+    },
+    ...overrides,
+  }
+}
 
 async function waitForOpen(socket: WebSocket) {
   if (socket.readyState === WebSocket.OPEN) {
@@ -24,6 +40,29 @@ async function waitForOpen(socket: WebSocket) {
 async function waitForMessage(socket: WebSocket) {
   const [data] = await once(socket, "message")
   return JSON.parse(data.toString())
+}
+
+async function waitForMessages(socket: WebSocket, count: number) {
+  return new Promise<unknown[]>((resolve) => {
+    const messages: unknown[] = []
+    const handler = (data: RawData) => {
+      messages.push(JSON.parse(data.toString()))
+      if (messages.length === count) {
+        socket.off("message", handler)
+        resolve(messages)
+      }
+    }
+
+    socket.on("message", handler)
+  })
+}
+
+async function waitForClose(socket: WebSocket) {
+  const [code, reason] = await once(socket, "close")
+  return {
+    code: code as number,
+    reason: reason.toString(),
+  }
 }
 
 async function waitForCondition(check: () => boolean, timeoutMs = 1_000) {
@@ -64,7 +103,7 @@ async function closeSocket(socket: WebSocket) {
   ])
 }
 
-describe("server smoke test", () => {
+describe("server", () => {
   const servers: Array<ReturnType<typeof createHttpServer>> = []
   const sockets: WebSocket[] = []
 
@@ -90,22 +129,26 @@ describe("server smoke test", () => {
     servers.length = 0
   })
 
-  it("creates a session and streams notifications over websocket", async () => {
-    const fake = new FakeChildProcess()
-    const config = loadConfig()
-    const registry = new SessionRegistry({
-      reconnectTtlMs: 500,
-      initializeTimeoutMs: 100,
-      experimentalApi: false,
-      clientInfo: config.clientInfo,
-      spawnProcess: () => fake,
-    })
-    queueMicrotask(() => {
-      fake.send({ id: 0, result: {} })
-    })
+  it("loads the generated schema bundle from the protocol package", () => {
+    const schema = JSON.parse(
+      readFileSync(getCodexSchemaBundlePath(), "utf8")
+    ) as {
+      definitions?: Record<string, unknown>
+    }
 
-    const app = createApp(config, registry)
-    const server = createHttpServer(app, registry)
+    expect(schema.definitions?.ClientRequest).toBeDefined()
+    expect(schema.definitions?.JSONRPCMessage).toBeDefined()
+  })
+
+  it("serves health and version endpoints", async () => {
+    const server = createHttpServer(createTestConfig(), {
+      healthCheck: () => ({
+        ok: true,
+        codexAvailable: true,
+        version: "1.2.3",
+        error: null,
+      }),
+    })
     servers.push(server)
 
     await new Promise<void>((resolve) => {
@@ -118,52 +161,353 @@ describe("server smoke test", () => {
     }
 
     const baseUrl = `http://127.0.0.1:${address.port}`
-    const createResponse = await fetch(`${baseUrl}/api/sessions`, {
-      method: "POST",
+    const healthResponse = await fetch(`${baseUrl}/healthz`)
+    const healthPayload = (await healthResponse.json()) as {
+      ok: boolean
+      version: string
+    }
+    expect(healthPayload).toEqual({
+      ok: true,
+      codexAvailable: true,
+      version: "1.2.3",
+      error: null,
     })
-    const createPayload = (await createResponse.json()) as {
-      sessionId: string
-      wsUrl: string
+
+    const versionResponse = await fetch(`${baseUrl}/version`)
+    const versionPayload = (await versionResponse.json()) as {
+      name: string
+    }
+    expect(versionPayload.name).toBe("frame_server_v2")
+
+    const missingResponse = await fetch(`${baseUrl}/missing`)
+    expect(missingResponse.status).toBe(404)
+  })
+
+  it("rejects websocket upgrades on unexpected paths", async () => {
+    const server = createHttpServer(createTestConfig(), {
+      spawnProcess: () => new FakeChildProcess(),
+      healthCheck: () => ({
+        ok: true,
+        codexAvailable: true,
+        version: "1.2.3",
+        error: null,
+      }),
+    })
+    servers.push(server)
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, resolve)
+    })
+
+    const address = server.address()
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP server address.")
     }
 
-    const socket = new WebSocket(createPayload.wsUrl)
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/bad`)
     sockets.push(socket)
-    const readyMessagePromise = waitForMessage(socket)
+
+    await expect(
+      Promise.race([
+        once(socket, "error").then(() => undefined),
+        once(socket, "close").then(() => undefined),
+      ])
+    ).resolves.toBeUndefined()
+  })
+
+  it("proxies initialize, model/list, thread/start, and turn/start over raw JSON-RPC", async () => {
+    const fake = new FakeChildProcess()
+    const server = createHttpServer(createTestConfig(), {
+      spawnProcess: () => fake,
+      healthCheck: () => ({
+        ok: true,
+        codexAvailable: true,
+        version: "1.2.3",
+        error: null,
+      }),
+    })
+    servers.push(server)
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, resolve)
+    })
+
+    const address = server.address()
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP server address.")
+    }
+
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+    sockets.push(socket)
     await waitForOpen(socket)
 
-    const readyMessage = await readyMessagePromise
-    expect(readyMessage).toEqual({
-      type: "session.ready",
-      sessionId: createPayload.sessionId,
-    })
+    socket.send(
+      JSON.stringify({
+        id: 0,
+        method: "initialize",
+        params: {
+          clientInfo: {
+            name: "frame_web",
+            title: "Frame Web",
+            version: "0.0.1",
+          },
+        },
+      })
+    )
+    socket.send(JSON.stringify({ method: "initialized" }))
 
-    const notificationPromise = waitForMessage(socket)
+    await waitForCondition(() => fake.writtenMessages.length === 2)
+    expect(fake.writtenMessages).toEqual([
+      {
+        id: 0,
+        method: "initialize",
+        params: {
+          clientInfo: {
+            name: "frame_web",
+            title: "Frame Web",
+            version: "0.0.1",
+          },
+        },
+      },
+      {
+        method: "initialized",
+      },
+    ])
+
+    const initializeResponsePromise = waitForMessage(socket)
     fake.send({
-      method: "turn/started",
-      params: {
-        turn: { id: "turn_123" },
+      id: 0,
+      result: {
+        userAgent: "frame",
       },
     })
-
-    const notification = await notificationPromise
-    expect(notification).toEqual({
-      type: "rpc.notification",
-      message: {
-        method: "turn/started",
-        params: {
-          turn: { id: "turn_123" },
-        },
+    expect(await initializeResponsePromise).toEqual({
+      id: 0,
+      result: {
+        userAgent: "frame",
       },
     })
 
     socket.send(
       JSON.stringify({
-        type: "rpc.request",
-        message: {
-          id: 10,
-          method: "thread/start",
-          params: {
-            model: "gpt-5.1-codex",
+        id: 1,
+        method: "model/list",
+        params: {
+          includeHidden: false,
+          limit: 20,
+        },
+      })
+    )
+
+    await waitForCondition(() =>
+      fake.writtenMessages.some(
+        (message) =>
+          typeof message === "object" &&
+          message !== null &&
+          "id" in message &&
+          message.id === 1
+      )
+    )
+
+    const modelListResponsePromise = waitForMessage(socket)
+    fake.send({
+      id: 1,
+      result: {
+        data: [{ id: "gpt-5.4" }],
+        nextCursor: null,
+      },
+    })
+    expect(await modelListResponsePromise).toEqual({
+      id: 1,
+      result: {
+        data: [{ id: "gpt-5.4" }],
+        nextCursor: null,
+      },
+    })
+
+    socket.send(
+      JSON.stringify({
+        id: 2,
+        method: "thread/start",
+        params: {
+          model: "gpt-5.1-codex",
+          experimentalRawEvents: false,
+        },
+      })
+    )
+    const threadMessagesPromise = waitForMessages(socket, 2)
+    fake.send({
+      id: 2,
+      result: {
+        thread: {
+          id: "thr_123",
+        },
+      },
+    })
+    fake.send({
+      method: "thread/started",
+      params: {
+        thread: {
+          id: "thr_123",
+        },
+      },
+    })
+    expect(await threadMessagesPromise).toEqual([
+      {
+        id: 2,
+        result: {
+          thread: {
+            id: "thr_123",
+          },
+        },
+      },
+      {
+        method: "thread/started",
+        params: {
+          thread: {
+            id: "thr_123",
+          },
+        },
+      },
+    ])
+
+    socket.send(
+      JSON.stringify({
+        id: 3,
+        method: "turn/start",
+        params: {
+          threadId: "thr_123",
+          input: [{ type: "text", text: "Summarize this repo." }],
+        },
+      })
+    )
+    const turnMessagesPromise = waitForMessages(socket, 3)
+    fake.send({
+      id: 3,
+      result: {
+        turn: {
+          id: "turn_123",
+        },
+      },
+    })
+    fake.send({
+      method: "item/started",
+      params: {
+        item: {
+          id: "item_1",
+          type: "agentMessage",
+          text: "",
+        },
+      },
+    })
+    fake.send({
+      method: "turn/completed",
+      params: {
+        turn: {
+          id: "turn_123",
+          status: "completed",
+        },
+      },
+    })
+
+    expect(await turnMessagesPromise).toEqual([
+      {
+        id: 3,
+        result: {
+          turn: {
+            id: "turn_123",
+          },
+        },
+      },
+      {
+        method: "item/started",
+        params: {
+          item: {
+            id: "item_1",
+            type: "agentMessage",
+            text: "",
+          },
+        },
+      },
+      {
+        method: "turn/completed",
+        params: {
+          turn: {
+            id: "turn_123",
+            status: "completed",
+          },
+        },
+      },
+    ])
+  })
+
+  it("routes server-initiated requests back upstream by id", async () => {
+    const fake = new FakeChildProcess()
+    const server = createHttpServer(createTestConfig(), {
+      spawnProcess: () => fake,
+      healthCheck: () => ({
+        ok: true,
+        codexAvailable: true,
+        version: "1.2.3",
+        error: null,
+      }),
+    })
+    servers.push(server)
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, resolve)
+    })
+
+    const address = server.address()
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP server address.")
+    }
+
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+    sockets.push(socket)
+    await waitForOpen(socket)
+
+    socket.send(
+      JSON.stringify({
+        id: 0,
+        method: "initialize",
+        params: {
+          clientInfo: {
+            name: "frame_web",
+            version: "0.0.1",
+          },
+        },
+      })
+    )
+    socket.send(JSON.stringify({ method: "initialized" }))
+    const initializeResponsePromise = waitForMessage(socket)
+    fake.send({ id: 0, result: {} })
+    await initializeResponsePromise
+
+    const serverRequestPromise = waitForMessage(socket)
+    fake.send({
+      id: "request-1",
+      method: "item/tool/requestUserInput",
+      params: {
+        questions: [],
+      },
+    })
+    expect(await serverRequestPromise).toEqual({
+      id: "request-1",
+      method: "item/tool/requestUserInput",
+      params: {
+        questions: [],
+      },
+    })
+
+    socket.send(
+      JSON.stringify({
+        id: "request-1",
+        result: {
+          answers: {
+            workspace: {
+              answers: ["Use the current repo"],
+            },
           },
         },
       })
@@ -175,176 +519,154 @@ describe("server smoke test", () => {
           typeof message === "object" &&
           message !== null &&
           "id" in message &&
-          message.id === 10
+          message.id === "request-1"
       )
     )
+  })
 
-    const responsePromise = waitForMessage(socket)
-    fake.send({
-      id: 10,
-      result: {
-        thread: {
-          id: "thr_123",
+  it("rejects requests before initialize and closes invalid payloads", async () => {
+    const fake = new FakeChildProcess()
+    const server = createHttpServer(createTestConfig(), {
+      spawnProcess: () => fake,
+      healthCheck: () => ({
+        ok: true,
+        codexAvailable: true,
+        version: "1.2.3",
+        error: null,
+      }),
+    })
+    servers.push(server)
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, resolve)
+    })
+
+    const address = server.address()
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP server address.")
+    }
+
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+    sockets.push(socket)
+    await waitForOpen(socket)
+
+    socket.send(
+      JSON.stringify({
+        id: 99,
+        method: "model/list",
+        params: {
+          includeHidden: false,
+          limit: 20,
         },
+      })
+    )
+
+    expect(await waitForMessage(socket)).toEqual({
+      id: 99,
+      error: {
+        code: -32002,
+        message: "Connection not initialized.",
       },
     })
 
-    const response = await responsePromise
-    expect(response).toEqual({
-      type: "rpc.response",
-      message: {
-        id: 10,
-        result: {
-          thread: {
-            id: "thr_123",
-          },
-        },
-      },
+    socket.send("not-json")
+    expect(await waitForClose(socket)).toMatchObject({
+      code: 1008,
     })
   })
 
-  it("routes browser server request responses through the session registry", async () => {
-    const fake = new FakeChildProcess()
-    const config = loadConfig()
-    const registry = new SessionRegistry({
-      reconnectTtlMs: 500,
-      initializeTimeoutMs: 100,
-      experimentalApi: false,
-      clientInfo: config.clientInfo,
-      spawnProcess: () => fake,
-    })
-    queueMicrotask(() => {
-      fake.send({ id: 0, result: {} })
-    })
-
-    const sessionId = await registry.createSession()
-
-    await registry.handleBrowserMessage(sessionId, {
-      type: "serverRequest.respond",
-      message: {
-        id: "question-1",
-        result: {
-          answers: {
-            workspace: {
-              answers: ["Use the current repo"],
-            },
-          },
-        },
-      },
-    })
-
-    await waitForCondition(() =>
-      fake.writtenMessages.some(
-        (message) =>
-          typeof message === "object" &&
-          message !== null &&
-          "id" in message &&
-          message.id === "question-1"
-      )
+  it("times out waiting for initialize and closes when upstream exits", async () => {
+    const timeoutServer = createHttpServer(
+      createTestConfig({
+        initializeTimeoutMs: 50,
+      }),
+      {
+        spawnProcess: () => new FakeChildProcess(),
+        healthCheck: () => ({
+          ok: true,
+          codexAvailable: true,
+          version: "1.2.3",
+          error: null,
+        }),
+      }
     )
+    servers.push(timeoutServer)
 
-    expect(fake.writtenMessages).toContainEqual({
-      id: "question-1",
-      result: {
-        answers: {
-          workspace: {
-            answers: ["Use the current repo"],
-          },
-        },
-      },
-    })
-  })
-
-  it("rejects browser initialize requests at the protocol boundary", async () => {
-    const fake = new FakeChildProcess()
-    const config = loadConfig()
-    const registry = new SessionRegistry({
-      reconnectTtlMs: 500,
-      initializeTimeoutMs: 100,
-      experimentalApi: false,
-      clientInfo: config.clientInfo,
-      spawnProcess: () => fake,
-    })
-    queueMicrotask(() => {
-      fake.send({ id: 0, result: {} })
+    await new Promise<void>((resolve) => {
+      timeoutServer.listen(0, resolve)
     })
 
-    await registry.createSession()
+    const timeoutAddress = timeoutServer.address()
+    if (!timeoutAddress || typeof timeoutAddress === "string") {
+      throw new Error("Expected TCP server address.")
+    }
 
-    const parsed = browserToServerMessageSchema.safeParse({
-      type: "rpc.request",
-      message: {
-        id: 11,
+    const timeoutSocket = new WebSocket(
+      `ws://127.0.0.1:${timeoutAddress.port}/ws`
+    )
+    sockets.push(timeoutSocket)
+    await waitForOpen(timeoutSocket)
+    timeoutSocket.send(
+      JSON.stringify({
+        id: 0,
         method: "initialize",
         params: {
           clientInfo: {
-            name: "bad_client",
-            title: "Bad Client",
+            name: "frame_web",
             version: "0.0.1",
           },
         },
-      },
-    })
-
-    expect(parsed.success).toBe(false)
-
-    const initializeWrites = fake.writtenMessages.filter(
-      (message) =>
-        typeof message === "object" &&
-        message !== null &&
-        "method" in message &&
-        message.method === "initialize"
+      })
     )
-    expect(initializeWrites).toHaveLength(1)
-  })
-
-  it("returns a degraded health response when codex is unavailable", async () => {
-    const config = {
-      ...loadConfig(),
-      codexCommand: "/definitely/missing/codex",
-    }
-    const registry = new SessionRegistry({
-      reconnectTtlMs: 500,
-      initializeTimeoutMs: 100,
-      experimentalApi: false,
-      clientInfo: config.clientInfo,
-      spawnProcess: () => new FakeChildProcess(),
+    expect(await waitForClose(timeoutSocket)).toMatchObject({
+      code: 1011,
     })
-    const app = createApp(config, registry)
 
-    const response = await app.request("http://localhost/healthz")
-    const payload = (await response.json()) as {
-      ok: boolean
-      codexAvailable: boolean
-      version: string | null
-      error: string | null
-    }
-
-    expect(response.status).toBe(200)
-    expect(payload.ok).toBe(false)
-    expect(payload.codexAvailable).toBe(false)
-    expect(payload.version).toBeNull()
-    expect(payload.error).toBeTruthy()
-  })
-
-  it("expires sessions that never attach a websocket", async () => {
     const fake = new FakeChildProcess()
-    const config = loadConfig()
-    const registry = new SessionRegistry({
-      reconnectTtlMs: 25,
-      initializeTimeoutMs: 100,
-      experimentalApi: false,
-      clientInfo: config.clientInfo,
+    const exitServer = createHttpServer(createTestConfig(), {
       spawnProcess: () => fake,
+      healthCheck: () => ({
+        ok: true,
+        codexAvailable: true,
+        version: "1.2.3",
+        error: null,
+      }),
+    })
+    servers.push(exitServer)
+
+    await new Promise<void>((resolve) => {
+      exitServer.listen(0, resolve)
     })
 
-    queueMicrotask(() => {
-      fake.send({ id: 0, result: {} })
+    const exitAddress = exitServer.address()
+    if (!exitAddress || typeof exitAddress === "string") {
+      throw new Error("Expected TCP server address.")
+    }
+
+    const exitSocket = new WebSocket(`ws://127.0.0.1:${exitAddress.port}/ws`)
+    sockets.push(exitSocket)
+    await waitForOpen(exitSocket)
+    exitSocket.send(
+      JSON.stringify({
+        id: 0,
+        method: "initialize",
+        params: {
+          clientInfo: {
+            name: "frame_web",
+            version: "0.0.1",
+          },
+        },
+      })
+    )
+    exitSocket.send(JSON.stringify({ method: "initialized" }))
+    const initializeResponsePromise = waitForMessage(exitSocket)
+    fake.send({ id: 0, result: {} })
+    await initializeResponsePromise
+
+    fake.crash(2)
+    expect(await waitForClose(exitSocket)).toMatchObject({
+      code: 1011,
+      reason: "Codex app-server exited with code 2.",
     })
-
-    const sessionId = await registry.createSession()
-    expect(registry.hasSession(sessionId)).toBe(true)
-
-    await waitForCondition(() => !registry.hasSession(sessionId))
   })
 })

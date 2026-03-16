@@ -8,7 +8,7 @@ type ThreadMessagesProps = {
 
 function getEmptyStateCopy(status: string, threadId: string | null) {
   if (status === "connecting") {
-    return "Connecting to server-v2..."
+    return "Connecting to server..."
   }
 
   if (status === "ready" && !threadId) {
@@ -20,7 +20,7 @@ function getEmptyStateCopy(status: string, threadId: string | null) {
   }
 
   if (status === "failed") {
-    return "The connection failed. Refresh the page after fixing server-v2."
+    return "The connection failed. Refresh the page after fixing server."
   }
 
   return "Messages will appear here once the thread is active."
@@ -39,7 +39,7 @@ export function ThreadMessages({
             {getEmptyStateCopy(status, threadId)}
           </p>
           <p className="text-xs text-muted-foreground">
-            Thread messages stream directly over the `server-v2` WebSocket
+            Thread messages stream directly over the `server` WebSocket
             bridge.
           </p>
         </div>
