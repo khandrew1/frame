@@ -256,14 +256,33 @@ export function createCodexWebClient(
     }
 
     connectPromise = new Promise<void>((resolve, reject) => {
+      let didSettle = false
+      const rejectConnect = (error: Error) => {
+        if (didSettle) {
+          return
+        }
+
+        didSettle = true
+        reject(error)
+      }
+
+      const resolveConnect = () => {
+        if (didSettle) {
+          return
+        }
+
+        didSettle = true
+        resolve()
+      }
+
       socket = new WebSocket(options.url)
 
       socket.addEventListener("open", () => {
         void initialize()
-          .then(resolve)
+          .then(resolveConnect)
           .catch((error) => {
             const clientError = new Error(getErrorMessage(error))
-            reject(clientError)
+            rejectConnect(clientError)
             options.onError(clientError)
           })
       })
@@ -284,6 +303,7 @@ export function createCodexWebClient(
           event.code === 1000
             ? new Error("WebSocket connection closed.")
             : new Error(event.reason || "WebSocket connection closed.")
+        rejectConnect(closeError)
         rejectPendingRequests(closeError)
 
         if (!isDisposed) {
