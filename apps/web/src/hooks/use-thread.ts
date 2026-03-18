@@ -1,7 +1,6 @@
 import {
   startTransition,
   useEffect,
-  useEffectEvent,
   useReducer,
   useRef,
 } from "react"
@@ -426,88 +425,93 @@ function isJsonRpcError<TResult>(
 export function useThread(options: UseThreadOptions = {}) {
   const [state, dispatch] = useReducer(reduceThreadState, initialState)
   const stateRef = useRef(state)
+  const optionsRef = useRef(options)
   const clientRef = useRef<ReturnType<typeof createCodexWebClient> | null>(null)
   const unsupportedServerRequestsRef = useRef<ServerRequest[]>([])
   const optimisticMessageCountRef = useRef(0)
   const modelsLoadedRef = useRef(false)
 
-  stateRef.current = state
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
 
-  const handleNotification = useEffectEvent(
-    (notification: ServerNotification) => {
-      startTransition(() => {
-        switch (notification.method) {
-          case "thread/started":
-            dispatch({
-              type: "thread.ready",
-              thread: notification.params.thread,
-              messages: hydrateThreadMessages(notification.params.thread),
-            })
-            break
-          case "thread/name/updated":
-            if (notification.params.threadName) {
-              options.onThreadNameUpdated?.(
-                notification.params.threadId,
-                notification.params.threadName
-              )
-            }
-            break
-          case "turn/started":
-            dispatch({
-              type: "turn.accepted",
-              turnId: notification.params.turn.id,
-            })
-            break
-          case "item/started":
-            if (notification.params.item.type !== "agentMessage") {
-              return
-            }
+  useEffect(() => {
+    optionsRef.current = options
+  }, [options])
 
-            dispatch({
-              type: "agent.started",
-              item: notification.params.item,
-              turnId: notification.params.turnId,
-            })
-            break
-          case "item/agentMessage/delta":
-            dispatch({
-              type: "agent.delta",
-              itemId: notification.params.itemId,
-              delta: notification.params.delta,
-              turnId: notification.params.turnId,
-            })
-            break
-          case "item/completed":
-            if (notification.params.item.type !== "agentMessage") {
-              return
-            }
+  const handleNotification = (notification: ServerNotification) => {
+    startTransition(() => {
+      switch (notification.method) {
+        case "thread/started":
+          dispatch({
+            type: "thread.ready",
+            thread: notification.params.thread,
+            messages: hydrateThreadMessages(notification.params.thread),
+          })
+          break
+        case "thread/name/updated":
+          if (notification.params.threadName) {
+            optionsRef.current.onThreadNameUpdated?.(
+              notification.params.threadId,
+              notification.params.threadName
+            )
+          }
+          break
+        case "turn/started":
+          dispatch({
+            type: "turn.accepted",
+            turnId: notification.params.turn.id,
+          })
+          break
+        case "item/started":
+          if (notification.params.item.type !== "agentMessage") {
+            return
+          }
 
-            dispatch({
-              type: "agent.completed",
-              item: notification.params.item,
-              turnId: notification.params.turnId,
-            })
-            break
-          case "turn/completed":
-            dispatch({
-              type: "turn.completed",
-              turnId: notification.params.turn.id,
-            })
-            break
-          case "error":
-            dispatch({
-              type: "error.nonfatal",
-              message: notification.params.error.message,
-            })
-            break
-          default:
-            break
-        }
-      })
-    }
-  )
+          dispatch({
+            type: "agent.started",
+            item: notification.params.item,
+            turnId: notification.params.turnId,
+          })
+          break
+        case "item/agentMessage/delta":
+          dispatch({
+            type: "agent.delta",
+            itemId: notification.params.itemId,
+            delta: notification.params.delta,
+            turnId: notification.params.turnId,
+          })
+          break
+        case "item/completed":
+          if (notification.params.item.type !== "agentMessage") {
+            return
+          }
 
-  const handleServerRequest = useEffectEvent((request: ServerRequest) => {
+          dispatch({
+            type: "agent.completed",
+            item: notification.params.item,
+            turnId: notification.params.turnId,
+          })
+          break
+        case "turn/completed":
+          dispatch({
+            type: "turn.completed",
+            turnId: notification.params.turn.id,
+          })
+          break
+        case "error":
+          dispatch({
+            type: "error.nonfatal",
+            message: notification.params.error.message,
+          })
+          break
+        default:
+          break
+      }
+    })
+  }
+
+  const handleServerRequest = (request: ServerRequest) => {
     unsupportedServerRequestsRef.current = [
       ...unsupportedServerRequestsRef.current,
       request,
@@ -520,27 +524,27 @@ export function useThread(options: UseThreadOptions = {}) {
         message: "Server request is not supported in the web client yet.",
       },
     })
-  })
+  }
 
-  const handleTransportError = useEffectEvent((error: Error) => {
+  const handleTransportError = (error: Error) => {
     startTransition(() => {
       dispatch({
         type: "error.fatal",
         message: error.message,
       })
     })
-  })
+  }
 
-  const handleTransportClose = useEffectEvent((info: ClientCloseInfo) => {
+  const handleTransportClose = (info: ClientCloseInfo) => {
     startTransition(() => {
       dispatch({
         type: "error.fatal",
         message: getCloseMessage(info),
       })
     })
-  })
+  }
 
-  const createClient = useEffectEvent(() => {
+  const createClient = () => {
     const existingClient = clientRef.current
     if (existingClient) {
       return existingClient
@@ -556,47 +560,42 @@ export function useThread(options: UseThreadOptions = {}) {
 
     clientRef.current = client
     return client
-  })
+  }
 
-  const loadModels = useEffectEvent(
-    async (client: ReturnType<typeof createCodexWebClient>) => {
-      if (modelsLoadedRef.current) {
+  const loadModels = async (client: ReturnType<typeof createCodexWebClient>) => {
+    if (modelsLoadedRef.current) {
+      return
+    }
+
+    try {
+      const response = await client.request<ModelListRequest>({
+        method: "model/list",
+        params: {
+          limit: 20,
+        },
+      })
+
+      if (isJsonRpcError(response)) {
         return
       }
 
-      try {
-        const response = await client.request<ModelListRequest>({
-          method: "model/list",
-          params: {
-            limit: 20,
-          },
-        })
+      const currentState = stateRef.current
+      const nextModel = pickModel(response.result.data, currentState.selectedModelId)
+      const nextEffort = pickEffort(nextModel, currentState.selectedEffort)
 
-        if (isJsonRpcError(response)) {
-          return
-        }
-
-        const currentState = stateRef.current
-        const nextModel = pickModel(
-          response.result.data,
-          currentState.selectedModelId
-        )
-        const nextEffort = pickEffort(nextModel, currentState.selectedEffort)
-
-        modelsLoadedRef.current = true
-        dispatch({
-          type: "models.loaded",
-          models: response.result.data,
-          selectedModelId: nextModel?.id ?? currentState.selectedModelId,
-          selectedEffort: nextEffort,
-        })
-      } catch {
-        // Keep the default model selection if model/list fails during lazy connect.
-      }
+      modelsLoadedRef.current = true
+      dispatch({
+        type: "models.loaded",
+        models: response.result.data,
+        selectedModelId: nextModel?.id ?? currentState.selectedModelId,
+        selectedEffort: nextEffort,
+      })
+    } catch {
+      // Keep the default model selection if model/list fails during lazy connect.
     }
-  )
+  }
 
-  const ensureConnected = useEffectEvent(async () => {
+  const ensureConnected = async () => {
     const client = createClient()
 
     await client.connect()
@@ -609,7 +608,7 @@ export function useThread(options: UseThreadOptions = {}) {
     }
 
     return client
-  })
+  }
 
   useEffect(() => {
     return () => {
