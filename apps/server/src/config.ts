@@ -40,7 +40,9 @@ function parseRpcLogMode(value: string | undefined): RpcLogMode {
     : "off"
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerV2Config {
+export function loadConfig(
+  env: NodeJS.ProcessEnv = process.env
+): ServerV2Config {
   const codexCommand = env.CODEX_COMMAND ?? "codex"
   const codexArgs = env.CODEX_APP_SERVER_ARGS
     ? env.CODEX_APP_SERVER_ARGS.split(" ").filter(Boolean)

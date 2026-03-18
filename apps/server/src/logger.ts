@@ -117,7 +117,6 @@ export function logRpcFailure(
     return
   }
 
-  const body =
-    typeof payload === "string" ? payload : stringifyJson(payload, 2)
+  const body = typeof payload === "string" ? payload : stringifyJson(payload, 2)
   console.error(`${header}\n${body}`)
 }
