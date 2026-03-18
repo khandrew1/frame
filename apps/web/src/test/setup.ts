@@ -34,6 +34,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   MockWebSocket.reset()
+  window.localStorage.clear()
 })
 
 afterEach(() => {

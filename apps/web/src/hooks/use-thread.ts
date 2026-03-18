@@ -12,26 +12,27 @@ import type { ServerRequest } from "@workspace/protocol/generated/codex/ServerRe
 import type { Model } from "@workspace/protocol/generated/codex/v2/Model"
 import type { Thread } from "@workspace/protocol/generated/codex/v2/Thread"
 import type { ThreadItem } from "@workspace/protocol/generated/codex/v2/ThreadItem"
+import type { UserInput } from "@workspace/protocol/generated/codex/v2/UserInput"
 
 import {
   DEFAULT_MODEL,
   DEFAULT_REASONING_EFFORT,
   SERVER_V2_WS_URL,
-  THREAD_TEST_CWD,
 } from "@/config"
 import {
   createCodexWebClient,
   type ClientCloseInfo,
   type ModelListRequest,
+  type ThreadResumeRequest,
   type ThreadStartRequest,
   type TurnStartRequest,
 } from "@/lib/codex-web-client"
 
 type ThreadStatus =
   | "idle"
-  | "connecting"
   | "ready"
   | "starting-thread"
+  | "resuming-thread"
   | "thread-ready"
   | "sending"
   | "streaming"
@@ -47,6 +48,7 @@ export type ThreadMessage = {
 
 type ThreadState = {
   status: ThreadStatus
+  isConnected: boolean
   thread: Thread | null
   models: Model[]
   selectedModelId: string
@@ -58,8 +60,7 @@ type ThreadState = {
 }
 
 type ThreadAction =
-  | { type: "transport.connecting" }
-  | { type: "transport.ready" }
+  | { type: "transport.connected" }
   | {
       type: "models.loaded"
       models: Model[]
@@ -68,7 +69,15 @@ type ThreadAction =
     }
   | { type: "selection.updated"; modelId: string; effort: ReasoningEffort }
   | { type: "thread.starting" }
-  | { type: "thread.ready"; thread: Thread }
+  | { type: "thread.resuming" }
+  | {
+      type: "thread.ready"
+      thread: Thread
+      messages: ThreadMessage[]
+      selectedModelId?: string
+      selectedEffort?: ReasoningEffort
+    }
+  | { type: "thread.cleared" }
   | { type: "turn.sending"; message: ThreadMessage }
   | { type: "turn.accepted"; turnId: string }
   | {
@@ -86,8 +95,13 @@ type ThreadAction =
   | { type: "error.nonfatal"; message: string }
   | { type: "error.fatal"; message: string }
 
+type UseThreadOptions = {
+  onThreadNameUpdated?: (threadId: string, title: string) => void
+}
+
 const initialState: ThreadState = {
   status: "idle",
+  isConnected: false,
   thread: null,
   models: [],
   selectedModelId: DEFAULT_MODEL,
@@ -163,21 +177,67 @@ function upsertAssistantMessage(
   )
 }
 
+function extractUserInputText(content: UserInput[]) {
+  const textParts = content
+    .filter(
+      (input): input is Extract<UserInput, { type: "text" }> =>
+        input.type === "text"
+    )
+    .map((input) => input.text)
+
+  return textParts.join("\n").trim()
+}
+
+function hydrateThreadMessages(thread: Thread): ThreadMessage[] {
+  return thread.turns.flatMap((turn) =>
+    turn.items.flatMap((item) => {
+      if (item.type === "userMessage") {
+        const text = extractUserInputText(item.content)
+        if (!text) {
+          return []
+        }
+
+        return [
+          {
+            id: item.id,
+            role: "user" as const,
+            text,
+            status: "complete" as const,
+            turnId: turn.id,
+          },
+        ]
+      }
+
+      if (item.type === "agentMessage") {
+        return [
+          {
+            id: item.id,
+            role: "assistant" as const,
+            text: item.text,
+            status:
+              turn.status === "in_progress"
+                ? ("streaming" as const)
+                : ("complete" as const),
+            turnId: turn.id,
+          },
+        ]
+      }
+
+      return []
+    })
+  )
+}
+
 function reduceThreadState(
   state: ThreadState,
   action: ThreadAction
 ): ThreadState {
   switch (action.type) {
-    case "transport.connecting":
+    case "transport.connected":
       return {
         ...state,
-        status: "connecting",
-        lastError: null,
-      }
-    case "transport.ready":
-      return {
-        ...state,
-        status: state.thread ? "thread-ready" : "ready",
+        isConnected: true,
+        status: state.status === "idle" ? "ready" : state.status,
         lastError: null,
       }
     case "models.loaded":
@@ -197,13 +257,43 @@ function reduceThreadState(
       return {
         ...state,
         status: "starting-thread",
+        thread: null,
+        messages: [],
+        pendingTurnId: null,
+        lastCompletedTurnId: null,
+        lastError: null,
+      }
+    case "thread.resuming":
+      return {
+        ...state,
+        status: "resuming-thread",
+        thread: null,
+        messages: [],
+        pendingTurnId: null,
+        lastCompletedTurnId: null,
         lastError: null,
       }
     case "thread.ready":
       return {
         ...state,
         status: "thread-ready",
+        isConnected: true,
         thread: action.thread,
+        messages: action.messages,
+        selectedModelId: action.selectedModelId ?? state.selectedModelId,
+        selectedEffort: action.selectedEffort ?? state.selectedEffort,
+        pendingTurnId: null,
+        lastCompletedTurnId: null,
+        lastError: null,
+      }
+    case "thread.cleared":
+      return {
+        ...state,
+        status: state.isConnected ? "ready" : "idle",
+        thread: null,
+        messages: [],
+        pendingTurnId: null,
+        lastCompletedTurnId: null,
         lastError: null,
       }
     case "turn.sending":
@@ -276,7 +366,11 @@ function reduceThreadState(
     case "turn.completed":
       return {
         ...state,
-        status: state.thread ? "thread-ready" : "ready",
+        status: state.thread
+          ? "thread-ready"
+          : state.isConnected
+            ? "ready"
+            : "idle",
         pendingTurnId: null,
         lastCompletedTurnId: action.turnId,
       }
@@ -285,12 +379,15 @@ function reduceThreadState(
         ...state,
         status:
           state.status === "starting-thread" ||
+          state.status === "resuming-thread" ||
           state.pendingTurnId ||
           state.status === "sending" ||
           state.status === "streaming"
             ? state.thread
               ? "thread-ready"
-              : "ready"
+              : state.isConnected
+                ? "ready"
+                : "idle"
             : state.status,
         pendingTurnId: null,
         lastCompletedTurnId: null,
@@ -299,6 +396,7 @@ function reduceThreadState(
     case "error.fatal":
       return {
         ...state,
+        isConnected: false,
         status: "failed",
         pendingTurnId: null,
         lastCompletedTurnId: null,
@@ -325,11 +423,15 @@ function isJsonRpcError<TResult>(
   return "error" in response
 }
 
-export function useThread() {
+export function useThread(options: UseThreadOptions = {}) {
   const [state, dispatch] = useReducer(reduceThreadState, initialState)
+  const stateRef = useRef(state)
   const clientRef = useRef<ReturnType<typeof createCodexWebClient> | null>(null)
   const unsupportedServerRequestsRef = useRef<ServerRequest[]>([])
   const optimisticMessageCountRef = useRef(0)
+  const modelsLoadedRef = useRef(false)
+
+  stateRef.current = state
 
   const handleNotification = useEffectEvent(
     (notification: ServerNotification) => {
@@ -339,7 +441,16 @@ export function useThread() {
             dispatch({
               type: "thread.ready",
               thread: notification.params.thread,
+              messages: hydrateThreadMessages(notification.params.thread),
             })
+            break
+          case "thread/name/updated":
+            if (notification.params.threadName) {
+              options.onThreadNameUpdated?.(
+                notification.params.threadId,
+                notification.params.threadName
+              )
+            }
             break
           case "turn/started":
             dispatch({
@@ -429,51 +540,11 @@ export function useThread() {
     })
   })
 
-  const loadModels = useEffectEvent(async () => {
-    const client = clientRef.current
-    if (!client) {
-      return
+  const createClient = useEffectEvent(() => {
+    const existingClient = clientRef.current
+    if (existingClient) {
+      return existingClient
     }
-
-    try {
-      const response = await client.request<ModelListRequest>({
-        method: "model/list",
-        params: {
-          limit: 20,
-        },
-      })
-
-      if (isJsonRpcError(response)) {
-        dispatch({
-          type: "error.nonfatal",
-          message: response.error.message,
-        })
-        return
-      }
-
-      const nextModel = pickModel(response.result.data, state.selectedModelId)
-      const nextEffort = pickEffort(nextModel, state.selectedEffort)
-
-      dispatch({
-        type: "models.loaded",
-        models: response.result.data,
-        selectedModelId: nextModel?.id ?? state.selectedModelId,
-        selectedEffort: nextEffort,
-      })
-    } catch (error) {
-      dispatch({
-        type: "error.nonfatal",
-        message: getErrorMessage(error),
-      })
-    }
-  })
-
-  useEffect(() => {
-    startTransition(() => {
-      dispatch({
-        type: "transport.connecting",
-      })
-    })
 
     const client = createCodexWebClient({
       url: SERVER_V2_WS_URL,
@@ -484,29 +555,66 @@ export function useThread() {
     })
 
     clientRef.current = client
+    return client
+  })
 
-    void client
-      .connect()
-      .then(() => {
-        startTransition(() => {
-          dispatch({
-            type: "transport.ready",
-          })
-        })
-        void loadModels()
-      })
-      .catch((error) => {
-        startTransition(() => {
-          dispatch({
-            type: "error.fatal",
-            message: getErrorMessage(error),
-          })
-        })
-      })
+  const loadModels = useEffectEvent(
+    async (client: ReturnType<typeof createCodexWebClient>) => {
+      if (modelsLoadedRef.current) {
+        return
+      }
 
+      try {
+        const response = await client.request<ModelListRequest>({
+          method: "model/list",
+          params: {
+            limit: 20,
+          },
+        })
+
+        if (isJsonRpcError(response)) {
+          return
+        }
+
+        const currentState = stateRef.current
+        const nextModel = pickModel(
+          response.result.data,
+          currentState.selectedModelId
+        )
+        const nextEffort = pickEffort(nextModel, currentState.selectedEffort)
+
+        modelsLoadedRef.current = true
+        dispatch({
+          type: "models.loaded",
+          models: response.result.data,
+          selectedModelId: nextModel?.id ?? currentState.selectedModelId,
+          selectedEffort: nextEffort,
+        })
+      } catch {
+        // Keep the default model selection if model/list fails during lazy connect.
+      }
+    }
+  )
+
+  const ensureConnected = useEffectEvent(async () => {
+    const client = createClient()
+
+    await client.connect()
+    await loadModels(client)
+
+    if (!stateRef.current.isConnected) {
+      dispatch({
+        type: "transport.connected",
+      })
+    }
+
+    return client
+  })
+
+  useEffect(() => {
     return () => {
+      clientRef.current?.dispose()
       clientRef.current = null
-      client.dispose()
     }
   }, [])
 
@@ -529,22 +637,18 @@ export function useThread() {
     })
   }
 
-  const startThread = async () => {
-    const client = clientRef.current
-    if (!client || state.status !== "ready") {
-      return
-    }
-
+  const startThread = async ({ cwd }: { cwd: string }) => {
     dispatch({
       type: "thread.starting",
     })
 
     try {
+      const client = await ensureConnected()
       const response = await client.request<ThreadStartRequest>({
         method: "thread/start",
         params: {
-          model: state.selectedModelId,
-          cwd: THREAD_TEST_CWD,
+          model: stateRef.current.selectedModelId,
+          cwd,
           experimentalRawEvents: false,
         },
       })
@@ -554,19 +658,82 @@ export function useThread() {
           type: "error.nonfatal",
           message: response.error.message,
         })
-        return
+        return null
       }
 
       dispatch({
         type: "thread.ready",
         thread: response.result.thread,
+        messages: hydrateThreadMessages(response.result.thread),
       })
+      return response.result.thread
     } catch (error) {
-      dispatch({
-        type: "error.nonfatal",
-        message: getErrorMessage(error),
-      })
+      if (stateRef.current.status !== "failed") {
+        dispatch({
+          type: "error.nonfatal",
+          message: getErrorMessage(error),
+        })
+      }
+
+      return null
     }
+  }
+
+  const resumeThread = async ({ threadId }: { threadId: string }) => {
+    dispatch({
+      type: "thread.resuming",
+    })
+
+    try {
+      const client = await ensureConnected()
+      const response = await client.request<ThreadResumeRequest>({
+        method: "thread/resume",
+        params: {
+          threadId,
+        },
+      })
+
+      if (isJsonRpcError(response)) {
+        dispatch({
+          type: "error.nonfatal",
+          message: response.error.message,
+        })
+        return null
+      }
+
+      const selectedModel = pickModel(
+        stateRef.current.models,
+        response.result.model
+      )
+      const selectedEffort = pickEffort(
+        selectedModel,
+        response.result.reasoningEffort ?? stateRef.current.selectedEffort
+      )
+
+      dispatch({
+        type: "thread.ready",
+        thread: response.result.thread,
+        messages: hydrateThreadMessages(response.result.thread),
+        selectedModelId: selectedModel?.id ?? response.result.model,
+        selectedEffort,
+      })
+      return response.result.thread
+    } catch (error) {
+      if (stateRef.current.status !== "failed") {
+        dispatch({
+          type: "error.nonfatal",
+          message: getErrorMessage(error),
+        })
+      }
+
+      return null
+    }
+  }
+
+  const clearLoadedThread = () => {
+    dispatch({
+      type: "thread.cleared",
+    })
   }
 
   const sendMessage = async (text: string) => {
@@ -654,6 +821,8 @@ export function useThread() {
     setSelectedModel,
     setSelectedEffort,
     startThread,
+    resumeThread,
+    clearLoadedThread,
     sendMessage,
   }
 }

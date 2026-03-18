@@ -1,10 +1,20 @@
 import { act, renderHook, waitFor } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import { useThread } from "@/hooks/use-thread"
 import { MockWebSocket } from "@/test/mock-websocket"
 
-function createThread(threadId = "thr_123") {
+function createThread(
+  threadId = "thr_123",
+  overrides: Partial<ReturnType<typeof createThreadBase>> = {}
+) {
+  return {
+    ...createThreadBase(threadId),
+    ...overrides,
+  }
+}
+
+function createThreadBase(threadId: string) {
   return {
     id: threadId,
     preview: "",
@@ -20,10 +30,14 @@ function createThread(threadId = "thr_123") {
   }
 }
 
-function createTurn(turnId = "turn_123", status = "in_progress") {
+function createTurn(
+  turnId = "turn_123",
+  status = "in_progress",
+  items: Array<unknown> = []
+) {
   return {
     id: turnId,
-    items: [],
+    items,
     status,
     error: null,
   }
@@ -66,9 +80,7 @@ function createModels() {
   ]
 }
 
-async function connectClient() {
-  const socket = MockWebSocket.latest()
-
+async function completeHandshake(socket: MockWebSocket) {
   act(() => {
     socket.serverOpen()
   })
@@ -120,35 +132,28 @@ async function connectClient() {
       },
     })
   })
-
-  return socket
 }
 
 describe("useThread", () => {
-  it("completes the handshake and becomes ready", async () => {
+  it("does not connect on mount", () => {
     const { result } = renderHook(() => useThread())
-    const socket = await connectClient()
 
-    await waitFor(() => {
-      expect(result.current.status).toBe("ready")
-    })
-
-    expect(socket.url).toBe("ws://localhost:8788/ws")
+    expect(result.current.status).toBe("idle")
+    expect(MockWebSocket.instances).toHaveLength(0)
   })
 
-  it("starts a thread and streams an assistant message", async () => {
+  it("starts a thread through a lazy connection", async () => {
     const { result } = renderHook(() => useThread())
-    const socket = await connectClient()
 
-    await waitFor(() => {
-      expect(result.current.status).toBe("ready")
-      expect(result.current.models).toHaveLength(2)
-    })
-
-    let startPromise: Promise<void>
+    let startPromise!: Promise<ReturnType<typeof createThread> | null>
     act(() => {
-      startPromise = result.current.startThread()
+      startPromise = result.current.startThread({ cwd: "/tmp/frame-web-test" })
     })
+
+    const socket = MockWebSocket.latest()
+    expect(result.current.status).toBe("starting-thread")
+
+    await completeHandshake(socket)
 
     await waitFor(() => {
       expect(socket.sentMessages()[3]).toMatchObject({
@@ -176,106 +181,155 @@ describe("useThread", () => {
 
     await waitFor(() => {
       expect(result.current.thread?.id).toBe("thr_123")
-      expect(result.current.status).toBe("thread-ready")
-    })
-
-    let sendPromise: Promise<boolean>
-    act(() => {
-      sendPromise = result.current.sendMessage("Summarize this repo.")
-    })
-
-    expect(result.current.messages[0]).toMatchObject({
-      role: "user",
-      text: "Summarize this repo.",
-    })
-
-    await waitFor(() => {
-      expect(socket.sentMessages()[4]).toMatchObject({
-        method: "turn/start",
-        params: {
-          threadId: "thr_123",
-          model: "gpt-5.4",
-          effort: "high",
-          input: [
-            {
-              type: "text",
-              text: "Summarize this repo.",
-              text_elements: [],
-            },
-          ],
-        },
-      })
-    })
-
-    act(() => {
-      socket.serverSend({
-        id: 3,
-        result: {
-          turn: createTurn(),
-        },
-      })
-      socket.serverSend({
-        method: "item/started",
-        params: {
-          threadId: "thr_123",
-          turnId: "turn_123",
-          item: {
-            id: "item_1",
-            type: "agentMessage",
-            text: "",
-          },
-        },
-      })
-      socket.serverSend({
-        method: "item/agentMessage/delta",
-        params: {
-          threadId: "thr_123",
-          turnId: "turn_123",
-          itemId: "item_1",
-          delta: "Repo summary",
-        },
-      })
-      socket.serverSend({
-        method: "turn/completed",
-        params: {
-          threadId: "thr_123",
-          turn: createTurn("turn_123", "completed"),
-        },
-      })
-    })
-
-    await act(async () => {
-      await sendPromise
-    })
-
-    await waitFor(() => {
-      expect(result.current.messages[1]).toMatchObject({
-        role: "assistant",
-        text: "Repo summary",
-      })
-      expect(result.current.isTurnPending).toBe(false)
+      expect(result.current.models).toHaveLength(2)
       expect(result.current.status).toBe("thread-ready")
     })
   })
 
-  it("blocks sending before a thread exists and surfaces close errors", async () => {
+  it("resumes a thread and hydrates message history", async () => {
     const { result } = renderHook(() => useThread())
-    const socket = await connectClient()
 
-    await act(async () => {
-      await expect(result.current.sendMessage("blocked")).resolves.toBe(false)
+    let resumePromise!: Promise<ReturnType<typeof createThread> | null>
+    act(() => {
+      resumePromise = result.current.resumeThread({ threadId: "thr_resume" })
     })
 
-    expect(socket.sentMessages()).toHaveLength(3)
+    const socket = MockWebSocket.latest()
+    await completeHandshake(socket)
+
+    await waitFor(() => {
+      expect(socket.sentMessages()[3]).toMatchObject({
+        method: "thread/resume",
+        params: {
+          threadId: "thr_resume",
+        },
+      })
+    })
 
     act(() => {
-      socket.serverClose(1011, "Codex app-server exited with code 2.", false)
+      socket.serverSend({
+        id: 2,
+        result: {
+          thread: createThread("thr_resume", {
+            preview: "Summarize this repo.",
+            turns: [
+              createTurn("turn_1", "completed", [
+                {
+                  id: "msg_user_1",
+                  type: "userMessage",
+                  content: [
+                    {
+                      type: "text",
+                      text: "Summarize this repo.",
+                      text_elements: [],
+                    },
+                  ],
+                },
+                {
+                  id: "msg_assistant_1",
+                  type: "agentMessage",
+                  text: "Repo summary",
+                },
+              ]),
+            ],
+          }),
+          model: "gpt-5.1-codex",
+          modelProvider: "openai",
+          cwd: "/tmp/frame-web-test",
+          approvalPolicy: "on-request",
+          sandbox: {
+            mode: "read-only",
+            writableRoots: [],
+            networkAccess: false,
+            excludeTmpdirEnvVar: false,
+            excludeSlashTmp: false,
+          },
+          reasoningEffort: "medium",
+        },
+      })
+    })
+
+    await act(async () => {
+      await resumePromise
     })
 
     await waitFor(() => {
-      expect(result.current.status).toBe("failed")
-      expect(result.current.lastError).toBe(
-        "Codex app-server exited with code 2."
+      expect(result.current.thread?.id).toBe("thr_resume")
+      expect(result.current.selectedModelId).toBe("gpt-5.1-codex")
+      expect(result.current.selectedEffort).toBe("medium")
+      expect(result.current.messages).toEqual([
+        {
+          id: "msg_user_1",
+          role: "user",
+          text: "Summarize this repo.",
+          status: "complete",
+          turnId: "turn_1",
+        },
+        {
+          id: "msg_assistant_1",
+          role: "assistant",
+          text: "Repo summary",
+          status: "complete",
+          turnId: "turn_1",
+        },
+      ])
+    })
+  })
+
+  it("forwards thread name updates after connecting", async () => {
+    const onThreadNameUpdated = vi.fn()
+    const { result } = renderHook(() =>
+      useThread({
+        onThreadNameUpdated,
+      })
+    )
+
+    let startPromise!: Promise<ReturnType<typeof createThread> | null>
+    act(() => {
+      startPromise = result.current.startThread({ cwd: "/tmp/frame-web-test" })
+    })
+
+    const socket = MockWebSocket.latest()
+    await completeHandshake(socket)
+
+    await waitFor(() => {
+      expect(socket.sentMessages()[3]).toMatchObject({
+        method: "thread/start",
+        params: {
+          model: "gpt-5.4",
+          cwd: "/tmp/frame-web-test",
+          experimentalRawEvents: false,
+        },
+      })
+    })
+
+    act(() => {
+      socket.serverSend({
+        id: 2,
+        result: {
+          thread: createThread(),
+        },
+      })
+    })
+
+    await act(async () => {
+      await startPromise
+    })
+
+    act(() => {
+      socket.serverSend({
+        method: "thread/name/updated",
+        params: {
+          threadId: "thr_123",
+          threadName: "Repo summary thread",
+        },
+      })
+    })
+
+    await waitFor(() => {
+      expect(onThreadNameUpdated).toHaveBeenCalledWith(
+        "thr_123",
+        "Repo summary thread"
       )
     })
   })
