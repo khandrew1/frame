@@ -1,5 +1,7 @@
 import * as React from "react"
 import { ArrowUp, ChevronDown, Plus } from "lucide-react"
+import type { ReasoningEffort } from "@workspace/protocol/generated/codex/ReasoningEffort"
+import type { Model } from "@workspace/protocol/generated/codex/v2/Model"
 import { Button } from "@workspace/ui/components/button"
 import { Textarea } from "@workspace/ui/components/textarea"
 import {
@@ -10,7 +12,31 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 import { cn } from "@workspace/ui/lib/utils"
 
-export function ChatComposer() {
+type ChatComposerProps = {
+  disabled?: boolean
+  onSubmit: (text: string) => Promise<boolean> | boolean
+  models: Model[]
+  selectedModelId: string
+  selectedModelLabel: string
+  onSelectModel: (modelId: string) => void
+  availableEfforts: ReasoningEffort[]
+  selectedEffort: ReasoningEffort
+  selectedEffortLabel: string
+  onSelectEffort: (effort: ReasoningEffort) => void
+}
+
+export function ChatComposer({
+  disabled = false,
+  onSubmit,
+  models,
+  selectedModelId,
+  selectedModelLabel,
+  onSelectModel,
+  availableEfforts,
+  selectedEffort,
+  selectedEffortLabel,
+  onSelectEffort,
+}: ChatComposerProps) {
   const [text, setText] = React.useState("")
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
@@ -23,9 +49,14 @@ export function ChatComposer() {
     }
   }
 
-  const handleSubmit = () => {
-    if (text.trim().length === 0) return
-    // TODO: implement actual submit logic
+  const handleSubmit = async () => {
+    if (disabled || text.trim().length === 0) return
+
+    const didSend = await onSubmit(text)
+    if (!didSend) {
+      return
+    }
+
     setText("")
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
@@ -37,9 +68,19 @@ export function ChatComposer() {
 
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
-      handleSubmit()
+      void handleSubmit()
     }
   }
+
+  const modelOptions =
+    models.length > 0
+      ? models
+      : [
+          {
+            id: selectedModelId,
+            displayName: selectedModelLabel,
+          } as Pick<Model, "id" | "displayName">,
+        ]
 
   return (
     <div className="mx-auto mt-auto w-full max-w-4xl px-4 pb-6">
@@ -49,6 +90,7 @@ export function ChatComposer() {
           value={text}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
+          disabled={disabled}
           placeholder="Ask Codex anything, @ to add files, / for commands"
           className="max-h-[200px] min-h-[48px] w-full resize-none border-0 bg-transparent px-3 py-3 text-base shadow-none focus-visible:ring-0 md:text-sm dark:bg-transparent"
           rows={1}
@@ -67,41 +109,68 @@ export function ChatComposer() {
             </Button>
 
             <DropdownMenu>
-              <DropdownMenuTrigger className="inline-flex h-8 w-auto items-center justify-center rounded-md px-2 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-muted/80 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring data-[state=open]:bg-muted/80">
-                GPT-5.4
+              <DropdownMenuTrigger
+                aria-label="Model selector"
+                className="inline-flex h-8 w-auto items-center justify-center rounded-md px-2 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-muted/80 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring data-[state=open]:bg-muted/80"
+              >
+                {selectedModelLabel}
                 <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-70" />
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="start"
-                className="w-[160px] rounded-xl"
+                className="w-[220px] rounded-xl"
               >
-                <DropdownMenuItem className="cursor-pointer rounded-lg text-sm">
-                  GPT-5.4
-                </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer rounded-lg text-sm">
-                  GPT-4.5
-                </DropdownMenuItem>
+                {modelOptions.map((model) => (
+                  <DropdownMenuItem
+                    key={model.id}
+                    className="cursor-pointer rounded-lg text-sm"
+                    onClick={() => {
+                      onSelectModel(model.id)
+                    }}
+                  >
+                    <span
+                      className={cn(
+                        model.id === selectedModelId && "font-semibold"
+                      )}
+                    >
+                      {model.displayName}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
 
             <DropdownMenu>
-              <DropdownMenuTrigger className="inline-flex h-8 items-center justify-center rounded-md px-2 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-muted/80 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring data-[state=open]:bg-muted/80">
-                High
+              <DropdownMenuTrigger
+                aria-label="Thinking level selector"
+                className="inline-flex h-8 items-center justify-center rounded-md px-2 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-muted/80 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring data-[state=open]:bg-muted/80"
+              >
+                {selectedEffortLabel}
                 <ChevronDown className="ml-1 h-3.5 w-3.5 opacity-70" />
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="start"
                 className="min-w-[120px] rounded-xl"
               >
-                <DropdownMenuItem className="cursor-pointer rounded-lg text-sm">
-                  Low
-                </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer rounded-lg text-sm">
-                  Medium
-                </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer rounded-lg text-sm">
-                  High
-                </DropdownMenuItem>
+                {availableEfforts.map((effort) => (
+                  <DropdownMenuItem
+                    key={effort}
+                    className="cursor-pointer rounded-lg text-sm"
+                    onClick={() => {
+                      onSelectEffort(effort)
+                    }}
+                  >
+                    <span
+                      className={cn(
+                        effort === selectedEffort && "font-semibold"
+                      )}
+                    >
+                      {effort === "xhigh"
+                        ? "X-High"
+                        : effort.charAt(0).toUpperCase() + effort.slice(1)}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -110,14 +179,17 @@ export function ChatComposer() {
           <div className="flex items-center">
             <Button
               size="icon"
-              onClick={handleSubmit}
+              type="button"
+              onClick={() => {
+                void handleSubmit()
+              }}
               className={cn(
                 "h-8 w-8 rounded-full transition-all duration-200",
-                text.trim().length > 0
+                text.trim().length > 0 && !disabled
                   ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
                   : "cursor-not-allowed bg-muted text-muted-foreground opacity-50 hover:bg-muted hover:text-muted-foreground"
               )}
-              disabled={text.trim().length === 0}
+              disabled={text.trim().length === 0 || disabled}
             >
               <ArrowUp className="h-4 w-4" />
               <span className="sr-only">Send message</span>

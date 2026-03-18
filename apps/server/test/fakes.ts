@@ -1,8 +1,8 @@
 import { EventEmitter } from "node:events"
 import { PassThrough, Writable } from "node:stream"
 
-import { JsonLineParser } from "../src/codex/jsonl.js"
-import type { ChildProcessLike } from "../src/codex/session.js"
+import { JsonLineParser } from "../src/jsonl.js"
+import type { ChildProcessLike } from "../src/codex-bridge.js"
 
 export class FakeChildProcess extends EventEmitter implements ChildProcessLike {
   stdout = new PassThrough()

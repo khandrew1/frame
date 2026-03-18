@@ -6,6 +6,7 @@
     "moduleResolution": "NodeNext",
     "skipLibCheck": true,
     "strict": true,
+    "types": ["node"],
     "noEmit": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
