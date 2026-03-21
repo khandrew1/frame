@@ -1,9 +1,4 @@
-import {
-  startTransition,
-  useEffect,
-  useReducer,
-  useRef,
-} from "react"
+import { startTransition, useEffect, useReducer, useRef } from "react"
 
 import type { ReasoningEffort } from "@workspace/protocol/generated/codex/ReasoningEffort"
 import type { ServerNotification } from "@workspace/protocol/generated/codex/ServerNotification"
@@ -562,7 +557,9 @@ export function useThread(options: UseThreadOptions = {}) {
     return client
   }
 
-  const loadModels = async (client: ReturnType<typeof createCodexWebClient>) => {
+  const loadModels = async (
+    client: ReturnType<typeof createCodexWebClient>
+  ) => {
     if (modelsLoadedRef.current) {
       return
     }
@@ -580,7 +577,10 @@ export function useThread(options: UseThreadOptions = {}) {
       }
 
       const currentState = stateRef.current
-      const nextModel = pickModel(response.result.data, currentState.selectedModelId)
+      const nextModel = pickModel(
+        response.result.data,
+        currentState.selectedModelId
+      )
       const nextEffort = pickEffort(nextModel, currentState.selectedEffort)
 
       modelsLoadedRef.current = true
