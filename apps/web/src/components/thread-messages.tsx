@@ -7,16 +7,16 @@ type ThreadMessagesProps = {
 }
 
 function getEmptyStateCopy(status: string, threadId: string | null) {
-  if (status === "connecting") {
-    return "Connecting to server..."
-  }
-
-  if (status === "ready" && !threadId) {
+  if ((status === "idle" || status === "ready") && !threadId) {
     return "Start a thread to begin sending messages."
   }
 
   if (status === "starting-thread") {
     return "Starting thread..."
+  }
+
+  if (status === "resuming-thread") {
+    return "Opening thread..."
   }
 
   if (status === "failed") {

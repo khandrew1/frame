@@ -4,6 +4,7 @@ import type { InitializeResponse } from "@workspace/protocol/generated/codex/Ini
 import type { ServerNotification } from "@workspace/protocol/generated/codex/ServerNotification"
 import type { ServerRequest } from "@workspace/protocol/generated/codex/ServerRequest"
 import type { ModelListResponse } from "@workspace/protocol/generated/codex/v2/ModelListResponse"
+import type { ThreadResumeResponse } from "@workspace/protocol/generated/codex/v2/ThreadResumeResponse"
 import type { ThreadStartResponse } from "@workspace/protocol/generated/codex/v2/ThreadStartResponse"
 import type { TurnStartResponse } from "@workspace/protocol/generated/codex/v2/TurnStartResponse"
 
@@ -40,6 +41,10 @@ type JsonRpcResponse<TResult = unknown> = JsonRpcSuccess<TResult> | JsonRpcError
 
 export type InitializeRequest = Extract<ClientRequest, { method: "initialize" }>
 export type ModelListRequest = Extract<ClientRequest, { method: "model/list" }>
+export type ThreadResumeRequest = Extract<
+  ClientRequest,
+  { method: "thread/resume" }
+>
 export type ThreadStartRequest = Extract<
   ClientRequest,
   { method: "thread/start" }
@@ -48,6 +53,7 @@ export type TurnStartRequest = Extract<ClientRequest, { method: "turn/start" }>
 type SupportedRequest =
   | InitializeRequest
   | ModelListRequest
+  | ThreadResumeRequest
   | ThreadStartRequest
   | TurnStartRequest
 
@@ -56,11 +62,13 @@ type ResponseForRequest<TRequest extends SupportedRequest> =
     ? InitializeResponse
     : TRequest extends ModelListRequest
       ? ModelListResponse
-      : TRequest extends ThreadStartRequest
-        ? ThreadStartResponse
-        : TRequest extends TurnStartRequest
-          ? TurnStartResponse
-          : never
+      : TRequest extends ThreadResumeRequest
+        ? ThreadResumeResponse
+        : TRequest extends ThreadStartRequest
+          ? ThreadStartResponse
+          : TRequest extends TurnStartRequest
+            ? TurnStartResponse
+            : never
 
 type PendingRequest = {
   resolve: (response: JsonRpcResponse<unknown>) => void

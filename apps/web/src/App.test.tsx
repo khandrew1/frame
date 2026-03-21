@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest"
 import { App } from "@/App"
 import { MockWebSocket } from "@/test/mock-websocket"
 
-function createThread() {
+function createThread(threadId = "thr_123", preview = "") {
   return {
-    id: "thr_123",
-    preview: "",
+    id: threadId,
+    preview,
     modelProvider: "openai",
     createdAt: 0,
     updatedAt: 0,
@@ -20,10 +20,40 @@ function createThread() {
   }
 }
 
-function createTurn(status = "in_progress") {
+function createResumedThread(threadId = "thr_123") {
   return {
-    id: "turn_123",
-    items: [],
+    ...createThread(threadId, "Hello from the UI"),
+    turns: [
+      createTurn("turn_1", "completed", [
+        {
+          id: "msg_user_1",
+          type: "userMessage",
+          content: [
+            {
+              type: "text",
+              text: "Hello from the UI",
+              text_elements: [],
+            },
+          ],
+        },
+        {
+          id: "msg_assistant_1",
+          type: "agentMessage",
+          text: "Assistant reply",
+        },
+      ]),
+    ],
+  }
+}
+
+function createTurn(
+  turnId = "turn_123",
+  status = "in_progress",
+  items: Array<unknown> = []
+) {
+  return {
+    id: turnId,
+    items,
     status,
     error: null,
   }
@@ -66,9 +96,7 @@ function createModels() {
   ]
 }
 
-async function connectUi() {
-  const socket = MockWebSocket.latest()
-
+async function completeHandshake(socket: MockWebSocket) {
   socket.serverOpen()
 
   await waitFor(() => {
@@ -82,10 +110,6 @@ async function connectUi() {
     result: {
       userAgent: "frame",
     },
-  })
-
-  await waitFor(() => {
-    expect(screen.getByText("Connected")).toBeInTheDocument()
   })
 
   await waitFor(() => {
@@ -104,72 +128,72 @@ async function connectUi() {
       nextCursor: null,
     },
   })
+}
 
-  await waitFor(() => {
-    expect(
-      screen.getByRole("button", { name: "Model selector" })
-    ).toHaveTextContent("GPT-5.4")
+function addProject(path = "/tmp/frame-web-test") {
+  fireEvent.click(screen.getByRole("button", { name: "Add project" }))
+  fireEvent.change(screen.getByLabelText("Project path"), {
+    target: { value: path },
   })
-
-  return socket
+  fireEvent.click(screen.getByRole("button", { name: "Add" }))
 }
 
 describe("App", () => {
-  it("starts a thread and renders streamed messages", async () => {
+  it("requires a selected project before starting a new thread", async () => {
     render(<App />)
-    const socket = await connectUi()
 
-    const composer = screen.getByPlaceholderText(
-      "Ask Codex anything, @ to add files, / for commands"
-    )
-    expect(composer).toBeDisabled()
+    const newThreadButton = screen.getByRole("button", { name: "New Thread" })
+    expect(newThreadButton).toBeDisabled()
+    expect(screen.getByText("Select a project")).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "Model selector" }))
-    fireEvent.click(screen.getByText("GPT-5.1 Codex"))
+    addProject()
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: "Model selector" })
-      ).toHaveTextContent("GPT-5.1 Codex")
-      expect(
-        screen.getByRole("button", { name: "Thinking level selector" })
-      ).toHaveTextContent("High")
+        screen.getAllByText("Start coding in frame-web-test").length
+      ).toBeGreaterThan(0)
+      expect(newThreadButton).not.toBeDisabled()
     })
+  })
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Thinking level selector" })
-    )
-    fireEvent.click(screen.getByText("X-High"))
+  it("starts a thread in the selected project, persists it, and resumes it from the sidebar", async () => {
+    const { unmount } = render(<App />)
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Thinking level selector" })
-      ).toHaveTextContent("X-High")
-    })
+    addProject()
 
-    fireEvent.click(screen.getByRole("button", { name: "Start Thread" }))
+    fireEvent.click(screen.getByRole("button", { name: "New Thread" }))
+    const startSocket = MockWebSocket.latest()
+    await completeHandshake(startSocket)
 
     await waitFor(() => {
-      expect(socket.sentMessages()[3]).toMatchObject({
+      expect(startSocket.sentMessages()[3]).toMatchObject({
         method: "thread/start",
         params: {
-          model: "gpt-5.1-codex",
+          model: "gpt-5.4",
           cwd: "/tmp/frame-web-test",
           experimentalRawEvents: false,
         },
       })
     })
 
-    socket.serverSend({
+    startSocket.serverSend({
       id: 2,
       result: {
-        thread: createThread(),
+        thread: createThread("thr_123"),
       },
     })
+
+    const composer = screen.getByPlaceholderText(
+      "Ask Codex anything, @ to add files, / for commands"
+    )
 
     await waitFor(() => {
       expect(screen.getByText("Thread ready")).toBeInTheDocument()
       expect(composer).not.toBeDisabled()
+      expect(
+        screen.getByRole("button", { name: "New Thread" })
+      ).toBeInTheDocument()
+      expect(screen.getByText("New thread")).toBeInTheDocument()
     })
 
     fireEvent.change(composer, {
@@ -178,29 +202,23 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send message" }))
 
     await waitFor(() => {
-      expect(socket.sentMessages()[4]).toMatchObject({
+      expect(startSocket.sentMessages()[4]).toMatchObject({
         method: "turn/start",
         params: {
           threadId: "thr_123",
-          model: "gpt-5.1-codex",
-          effort: "xhigh",
+          model: "gpt-5.4",
+          effort: "high",
         },
       })
     })
 
-    socket.serverSend({
+    startSocket.serverSend({
       id: 3,
       result: {
         turn: createTurn(),
       },
     })
-
-    await waitFor(() => {
-      expect(screen.getByDisplayValue("")).toBeInTheDocument()
-      expect(screen.getByText("Hello from the UI")).toBeInTheDocument()
-    })
-
-    socket.serverSend({
+    startSocket.serverSend({
       method: "item/started",
       params: {
         threadId: "thr_123",
@@ -212,7 +230,7 @@ describe("App", () => {
         },
       },
     })
-    socket.serverSend({
+    startSocket.serverSend({
       method: "item/agentMessage/delta",
       params: {
         threadId: "thr_123",
@@ -221,17 +239,65 @@ describe("App", () => {
         delta: "Assistant reply",
       },
     })
-    socket.serverSend({
+    startSocket.serverSend({
       method: "turn/completed",
       params: {
         threadId: "thr_123",
-        turn: createTurn("completed"),
+        turn: createTurn("turn_123", "completed"),
       },
     })
 
     await waitFor(() => {
       expect(screen.getByText("Assistant reply")).toBeInTheDocument()
-      expect(composer).not.toBeDisabled()
+    })
+
+    unmount()
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByText("New thread")).toBeInTheDocument()
+      expect(
+        screen.getAllByText("Start coding in frame-web-test").length
+      ).toBeGreaterThan(0)
+    })
+
+    fireEvent.click(screen.getByText("New thread"))
+
+    const resumeSocket = MockWebSocket.latest()
+    await completeHandshake(resumeSocket)
+
+    await waitFor(() => {
+      expect(resumeSocket.sentMessages()[3]).toMatchObject({
+        method: "thread/resume",
+        params: {
+          threadId: "thr_123",
+        },
+      })
+    })
+
+    resumeSocket.serverSend({
+      id: 2,
+      result: {
+        thread: createResumedThread("thr_123"),
+        model: "gpt-5.4",
+        modelProvider: "openai",
+        cwd: "/tmp/frame-web-test",
+        approvalPolicy: "on-request",
+        sandbox: {
+          mode: "read-only",
+          writableRoots: [],
+          networkAccess: false,
+          excludeTmpdirEnvVar: false,
+          excludeSlashTmp: false,
+        },
+        reasoningEffort: "high",
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Hello from the UI").length).toBeGreaterThan(0)
+      expect(screen.getByText("Assistant reply")).toBeInTheDocument()
     })
   })
 })
