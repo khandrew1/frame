@@ -14,6 +14,7 @@ import { WebSocket, type RawData } from "ws"
 
 import { type ServerV2Config } from "./config.js"
 import { encodeJsonLine, JsonLineParser } from "./jsonl.js"
+import { logRpcFailure, logRpcMessage } from "./logger.js"
 import {
   createBrowserMessageValidator,
   type BrowserMessageValidator,
@@ -174,21 +175,37 @@ export class CodexBridge {
       return
     }
 
+    const rawText = raw.toString()
     let decoded: unknown
     try {
-      decoded = JSON.parse(raw.toString())
+      decoded = JSON.parse(rawText)
     } catch {
+      logRpcFailure(
+        this.#config.rpcLogMode,
+        "browser->server",
+        "parse",
+        "Invalid JSON payload from browser.",
+        rawText
+      )
       this.#closeWithPolicyViolation("Invalid JSON payload from browser.")
       return
     }
 
     const validation = this.#validator.validate(decoded)
     if (!validation.ok) {
+      logRpcFailure(
+        this.#config.rpcLogMode,
+        "browser->server",
+        "validate",
+        validation.error,
+        decoded
+      )
       this.#closeWithPolicyViolation(validation.error)
       return
     }
 
     const message = validation.value
+    logRpcMessage(this.#config.rpcLogMode, "browser->server", message)
     if (isJsonRpcRequest(message)) {
       this.#handleBrowserRequest(message as CodexClientRequest)
       return
@@ -290,6 +307,13 @@ export class CodexBridge {
   #handleUpstreamMessage(message: unknown) {
     const parsed = jsonRpcMessageSchema.safeParse(message)
     if (!parsed.success) {
+      logRpcFailure(
+        this.#config.rpcLogMode,
+        "codex->server",
+        "validate",
+        "Received invalid JSON-RPC message from codex.",
+        message
+      )
       this.#closeWithInternalError(
         "Received invalid JSON-RPC message from codex."
       )
@@ -297,6 +321,7 @@ export class CodexBridge {
     }
 
     const jsonRpcMessage = parsed.data
+    logRpcMessage(this.#config.rpcLogMode, "codex->server", jsonRpcMessage)
     if (isJsonRpcResponse(jsonRpcMessage)) {
       if (
         this.#initializeRequestId !== null &&
@@ -325,6 +350,7 @@ export class CodexBridge {
   #writeUpstream(
     message: CodexClientRequest | CodexClientNotification | JsonRpcResponse
   ) {
+    logRpcMessage(this.#config.rpcLogMode, "server->codex", message)
     this.#process.stdin.write(encodeJsonLine(message))
   }
 
@@ -333,6 +359,7 @@ export class CodexBridge {
       return
     }
 
+    logRpcMessage(this.#config.rpcLogMode, "server->browser", message)
     this.#ws.send(JSON.stringify(message))
   }
 

@@ -1,7 +1,7 @@
 import { once } from "node:events"
 import { readFileSync } from "node:fs"
 
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { getCodexSchemaBundlePath } from "@workspace/protocol"
 import { WebSocket, type RawData } from "ws"
 
@@ -17,6 +17,7 @@ function createTestConfig(
     initializeTimeoutMs: 100,
     codexCommand: "codex",
     codexArgs: ["app-server"],
+    rpcLogMode: "off",
     clientInfo: {
       name: "frame_server_v2",
       title: "Frame Server V2",
@@ -127,6 +128,7 @@ describe("server", () => {
       )
     )
     servers.length = 0
+    vi.restoreAllMocks()
   })
 
   it("loads the generated schema bundle from the protocol package", () => {
@@ -668,5 +670,386 @@ describe("server", () => {
       code: 1011,
       reason: "Codex app-server exited with code 2.",
     })
+  })
+
+  it("does not emit rpc logs when rpc logging is off", async () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const fake = new FakeChildProcess()
+    const server = createHttpServer(createTestConfig(), {
+      spawnProcess: () => fake,
+      healthCheck: () => ({
+        ok: true,
+        codexAvailable: true,
+        version: "1.2.3",
+        error: null,
+      }),
+    })
+    servers.push(server)
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, resolve)
+    })
+
+    const address = server.address()
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP server address.")
+    }
+
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+    sockets.push(socket)
+    await waitForOpen(socket)
+
+    socket.send(
+      JSON.stringify({
+        id: 0,
+        method: "initialize",
+        params: {
+          clientInfo: {
+            name: "frame_web",
+            version: "0.0.1",
+          },
+        },
+      })
+    )
+    await waitForCondition(() => fake.writtenMessages.length === 1)
+
+    expect(debugSpy).not.toHaveBeenCalled()
+    expect(errorSpy).not.toHaveBeenCalled()
+  })
+
+  it("emits summary rpc logs for each json-rpc message kind", async () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {})
+    const fake = new FakeChildProcess()
+    const server = createHttpServer(
+      createTestConfig({
+        rpcLogMode: "summary",
+      }),
+      {
+        spawnProcess: () => fake,
+        healthCheck: () => ({
+          ok: true,
+          codexAvailable: true,
+          version: "1.2.3",
+          error: null,
+        }),
+      }
+    )
+    servers.push(server)
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, resolve)
+    })
+
+    const address = server.address()
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP server address.")
+    }
+
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+    sockets.push(socket)
+    await waitForOpen(socket)
+
+    socket.send(
+      JSON.stringify({
+        id: 0,
+        method: "initialize",
+        params: {
+          clientInfo: {
+            name: "frame_web",
+            version: "0.0.1",
+          },
+        },
+      })
+    )
+    socket.send(JSON.stringify({ method: "initialized" }))
+    await waitForCondition(() => fake.writtenMessages.length === 2)
+
+    fake.send({ id: 0, result: {} })
+    await waitForMessage(socket)
+
+    fake.send({
+      id: "request-1",
+      method: "item/tool/requestUserInput",
+      params: {
+        questions: [],
+      },
+    })
+    await waitForMessage(socket)
+
+    socket.send(
+      JSON.stringify({
+        id: "request-1",
+        result: {
+          answers: {},
+        },
+      })
+    )
+    await waitForCondition(() =>
+      fake.writtenMessages.some(
+        (message) =>
+          typeof message === "object" &&
+          message !== null &&
+          "id" in message &&
+          message.id === "request-1"
+      )
+    )
+
+    const output = debugSpy.mock.calls
+      .map(([message]) => String(message))
+      .join("\n")
+
+    expect(output).toContain("browser->server request")
+    expect(output).toContain("method=initialize")
+    expect(output).toContain("browser->server notification")
+    expect(output).toContain("method=initialized")
+    expect(output).toContain("browser->server response")
+    expect(output).toContain('id="request-1"')
+    expect(output).toContain("status=ok")
+    expect(output).toContain("codex->server request")
+    expect(output).toContain("method=item/tool/requestUserInput")
+    expect(output).toContain("codex->server response")
+    expect(output).toContain("server->browser request")
+    expect(output).toContain("server->browser response")
+    expect(output).toContain("server->codex notification")
+    expect(output).toContain("server->codex request")
+    expect(output).toContain("server->codex response")
+  })
+
+  it("includes a compact payload preview in verbose mode", async () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {})
+    const fake = new FakeChildProcess()
+    const server = createHttpServer(
+      createTestConfig({
+        rpcLogMode: "verbose",
+      }),
+      {
+        spawnProcess: () => fake,
+        healthCheck: () => ({
+          ok: true,
+          codexAvailable: true,
+          version: "1.2.3",
+          error: null,
+        }),
+      }
+    )
+    servers.push(server)
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, resolve)
+    })
+
+    const address = server.address()
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP server address.")
+    }
+
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+    sockets.push(socket)
+    await waitForOpen(socket)
+
+    socket.send(
+      JSON.stringify({
+        id: 0,
+        method: "initialize",
+        params: {
+          clientInfo: {
+            name: "frame_web",
+            version: "0.0.1",
+          },
+        },
+      })
+    )
+    await waitForCondition(() => fake.writtenMessages.length === 1)
+
+    const output = debugSpy.mock.calls
+      .map(([message]) => String(message))
+      .join("\n")
+
+    expect(output).toContain("payload=")
+    expect(output).toContain('"method":"initialize"')
+  })
+
+  it("emits multiline trace logs for all bridge directions", async () => {
+    const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {})
+    const fake = new FakeChildProcess()
+    const server = createHttpServer(
+      createTestConfig({
+        rpcLogMode: "trace",
+      }),
+      {
+        spawnProcess: () => fake,
+        healthCheck: () => ({
+          ok: true,
+          codexAvailable: true,
+          version: "1.2.3",
+          error: null,
+        }),
+      }
+    )
+    servers.push(server)
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, resolve)
+    })
+
+    const address = server.address()
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP server address.")
+    }
+
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+    sockets.push(socket)
+    await waitForOpen(socket)
+
+    socket.send(
+      JSON.stringify({
+        id: 0,
+        method: "initialize",
+        params: {
+          clientInfo: {
+            name: "frame_web",
+            version: "0.0.1",
+          },
+        },
+      })
+    )
+    await waitForCondition(() => fake.writtenMessages.length === 1)
+
+    fake.send({
+      id: 0,
+      result: {
+        userAgent: "frame",
+      },
+    })
+    await waitForMessage(socket)
+
+    const output = debugSpy.mock.calls
+      .map(([message]) => String(message))
+      .join("\n")
+
+    expect(output).toContain("browser->server request")
+    expect(output).toContain("server->codex request")
+    expect(output).toContain("codex->server response")
+    expect(output).toContain("server->browser response")
+    expect(output).toContain('\n{\n  "id": 0,')
+  })
+
+  it("logs invalid browser json and schema failures", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const fake = new FakeChildProcess()
+    const server = createHttpServer(
+      createTestConfig({
+        rpcLogMode: "trace",
+      }),
+      {
+        spawnProcess: () => fake,
+        healthCheck: () => ({
+          ok: true,
+          codexAvailable: true,
+          version: "1.2.3",
+          error: null,
+        }),
+      }
+    )
+    servers.push(server)
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, resolve)
+    })
+
+    const address = server.address()
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP server address.")
+    }
+
+    const invalidJsonSocket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+    sockets.push(invalidJsonSocket)
+    await waitForOpen(invalidJsonSocket)
+    invalidJsonSocket.send("not-json")
+    await waitForClose(invalidJsonSocket)
+
+    const invalidShapeSocket = new WebSocket(
+      `ws://127.0.0.1:${address.port}/ws`
+    )
+    sockets.push(invalidShapeSocket)
+    await waitForOpen(invalidShapeSocket)
+    invalidShapeSocket.send(
+      JSON.stringify({
+        id: 1,
+        method: "initialize",
+        params: "bad",
+      })
+    )
+    await waitForClose(invalidShapeSocket)
+
+    const output = errorSpy.mock.calls
+      .map(([message]) => String(message))
+      .join("\n")
+
+    expect(output).toContain("browser->server parse")
+    expect(output).toContain("Invalid JSON payload from browser.")
+    expect(output).toContain("browser->server validate")
+    expect(output).toContain('"params": "bad"')
+  })
+
+  it("logs invalid upstream json-rpc payloads", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const fake = new FakeChildProcess()
+    const server = createHttpServer(
+      createTestConfig({
+        rpcLogMode: "trace",
+      }),
+      {
+        spawnProcess: () => fake,
+        healthCheck: () => ({
+          ok: true,
+          codexAvailable: true,
+          version: "1.2.3",
+          error: null,
+        }),
+      }
+    )
+    servers.push(server)
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, resolve)
+    })
+
+    const address = server.address()
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP server address.")
+    }
+
+    const socket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+    sockets.push(socket)
+    await waitForOpen(socket)
+
+    socket.send(
+      JSON.stringify({
+        id: 0,
+        method: "initialize",
+        params: {
+          clientInfo: {
+            name: "frame_web",
+            version: "0.0.1",
+          },
+        },
+      })
+    )
+    socket.send(JSON.stringify({ method: "initialized" }))
+    fake.send({ id: 0, result: {} })
+    await waitForMessage(socket)
+
+    fake.stdout.write(`${JSON.stringify({ nope: true })}\n`)
+    await waitForClose(socket)
+
+    const output = errorSpy.mock.calls
+      .map(([message]) => String(message))
+      .join("\n")
+
+    expect(output).toContain("codex->server validate")
+    expect(output).toContain("Received invalid JSON-RPC message from codex.")
+    expect(output).toContain('"nope": true')
   })
 })
